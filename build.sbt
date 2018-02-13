@@ -1,14 +1,31 @@
 
+lazy val root = project.in(file("root")).
+  aggregate(loggingJVM, loggingJS).
+  settings(
+    publish := {},
+    publishLocal := {}
+  )
 
-name := "logging"
-version := "0.1.0"
-scalaVersion := "2.12.4"
+lazy val logging = crossProject.crossType(CrossType.Pure).in(file(".")).settings(
+  name := "logging",
+  organization := "de.rmgk",
+  version := "0.1.0",
+  scalaVersion := "2.12.4",
 
-libraryDependencies += "com.lihaoyi" %%% "sourcecode" % "0.1.4"
+  libraryDependencies += "com.lihaoyi" %%% "sourcecode" % "0.1.4",
 
 
-maxErrors := 10
-Compile / compile / scalacOptions ++= Seq(
+  maxErrors := 10,
+
+  compilerOptions,
+  bintray,
+)
+
+lazy val loggingJVM = logging.jvm
+lazy val loggingJS = logging.js
+
+
+lazy val compilerOptions = Compile / compile / scalacOptions ++= Seq(
   "-deprecation",
   "-encoding", "UTF-8",
   "-unchecked",
