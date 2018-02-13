@@ -1,5 +1,6 @@
 = Logging
 Ragnar Mogk, 2018-02-13, v0.1.0
+:libversion: 0.1.0
 
 Sometimes, I want to log some text.
 
@@ -10,6 +11,12 @@ Sometimes, I want to log with tags.
 Sometimes, I want to log with source lines.
 
 But never do I want to log with XML.
+
+== Dependencies
+
+[source,scala,subs="attributes"]
+resolvers += Resolver.bintrayRepo("rmgk", "maven"),
+libraryDependencies += "de.rmgk" %%% "logging" % "{libversion}"
 
 == Usage
 
