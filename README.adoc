@@ -1,0 +1,13 @@
+= Logging
+Ragnar Mogk, 2018-02-13, v0.1.0
+
+Sometimes, I just want to log some text to the console.
+
+Sometimes, I want different logging levels.
+
+Sometimes, I want to tag my loggers.
+
+Sometimes, I want linenumbers in my logs.
+
+But never do I want to write some XML.
+
