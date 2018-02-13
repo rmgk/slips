@@ -3,13 +3,13 @@ Ragnar Mogk, 2018-02-13, v0.1.0
 
 Sometimes, I want to log some text.
 
-Sometimes, I want different logging levels.
+Sometimes, I want to log with levels.
 
-Sometimes, I want to tag my loggers.
+Sometimes, I want to log with tags.
 
-Sometimes, I want linenumbers in my logs.
+Sometimes, I want to log with source lines.
 
-But never do I want to write some XML.
+But never do I want to log with XML.
 
 == Usage
 
@@ -31,7 +31,8 @@ log.error("text")
 ----
 
 Recommended usage and configuration is to create your own little libraries of
-loggers, and use them as you see fit.
+loggers, which can be centrally configured, and use them as you see fit.
+
 
 [source,scala]
 ----
@@ -40,9 +41,9 @@ import de.rmgk.logging.{Level, Logger}
 object Log {
 
   val common: Logger = de.rmgk.logging.Logger(tag = "", level = Level.Trace, tracing = true)
-  val Tool: Logger = common.copy(tag = "Tool: ")
+  val Tool: Logger = common.copy(tag = "Tool: ", level = Level.Info)
   val Main: Logger = common
-  val Web: Logger = common.copy(tag = "Web: ")
+  val Web: Logger = common.copy(tag = "Web: ", tracing = false)
   val Store: Logger = common.copy(tag = "IO: ")
   val Server: Logger = common.copy(tag = "Serv: ")
 }
@@ -58,3 +59,11 @@ object Server {
 }
 
 ----
+
+
+== Contributing
+
+Issues and pull request welcome.
+
+I assume that some more flexible configuration will be needed at some point,
+feel free to contribute usecases.
