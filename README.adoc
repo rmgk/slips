@@ -1,7 +1,7 @@
 = Logging
 Ragnar Mogk, 2018-02-13, v0.1.0
 
-Sometimes, I just want to log some text to the console.
+Sometimes, I want to log some text.
 
 Sometimes, I want different logging levels.
 
