@@ -4,7 +4,7 @@ name := "logging"
 version := "0.1.0"
 scalaVersion := "2.12.4"
 
-val sourceLine = libraryDependencies += "com.lihaoyi" %%% "sourcecode" % "0.1.4"
+libraryDependencies += "com.lihaoyi" %%% "sourcecode" % "0.1.4"
 
 
 maxErrors := 10
