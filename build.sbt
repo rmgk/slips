@@ -9,7 +9,7 @@ lazy val root = project.in(file("root")).
 lazy val logging = crossProject.crossType(CrossType.Pure).in(file(".")).settings(
   name := "logging",
   organization := "de.rmgk",
-  version := "0.1.0",
+  version := "0.1.1",
   scalaVersion := "2.12.4",
 
   libraryDependencies += "com.lihaoyi" %%% "sourcecode" % "0.1.4",

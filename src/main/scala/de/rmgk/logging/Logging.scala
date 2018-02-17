@@ -33,7 +33,7 @@ case class Logger(tag: String = "",
   }
 
   @inline final def log(l: Level, m: => Any)(implicit c: Context): Unit =
-    if (l.value >= level.value) Console.println(s"${l.prefix}$tag$m${tracemsg(c)}")
+    if (l.value >= level.value) Console.println(s"${l.prefix}$m [$tag]${tracemsg(c)}")
 }
 
 case class Context(file: sourcecode.File, line: sourcecode.Line)
