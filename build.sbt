@@ -1,12 +1,12 @@
 
-lazy val root = project.in(file("root")).
+lazy val root = project.in(file(".")).
   aggregate(loggingJVM, loggingJS).
   settings(
     publish := {},
     publishLocal := {}
   )
 
-lazy val logging = crossProject.crossType(CrossType.Pure).in(file(".")).settings(
+lazy val logging = crossProject.in(file(".")).settings(
   name := "logging",
   organization := "de.rmgk",
   version := "0.1.1",
