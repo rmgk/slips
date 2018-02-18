@@ -12,6 +12,19 @@ Sometimes, I want to log with source lines.
 
 But never do I want to log with XML.
 
+== Motivation
+
+This is a very simple logging library,
+intended as something more principled and structured than just `println`,
+but about as simple to set up.
+It provides some features such as tags, levels, and file and line information,
+but not much more is built in.
+
+The philosophy is, that simple logging does not need configuration files.
+And for complex logging configuration files are too limiting and complicated,
+so you can extend the logger using normal Scala code.
+
+
 == Dependencies
 
 [source,scala,subs="attributes"]
@@ -27,6 +40,8 @@ levels.
 ----
 import de.rmgk.logging.{Logger, Level}
 
+val log = Logger()
+// or
 val log = Logger(tag = "Prefixed to the output: ", level = Level.Debug)
 
 log.trace("text")
@@ -34,7 +49,6 @@ log.debug("text")
 log.info("text")
 log.warn("text")
 log.error("text")
-
 ----
 
 Recommended usage and configuration is to create your own little libraries of
@@ -46,26 +60,38 @@ loggers, which can be centrally configured, and use them as you see fit.
 import de.rmgk.logging.{Level, Logger}
 
 object Log {
-
-  val common: Logger = de.rmgk.logging.Logger(tag = "", level = Level.Trace, tracing = true)
+  val common: Logger = Logger(tag = "", level = Level.Trace)
   val Tool: Logger = common.copy(tag = "Tool", level = Level.Info)
   val Main: Logger = common
-  val Web: Logger = common.copy(tag = "Web", tracing = false)
+  val Web: Logger = common.copy(tag = "Web")
   val Store: Logger = common.copy(tag = "IO")
-  val Server: Logger = common.copy(tag = "Serv")
+  val Server: Logger = common.copy(tag = "Serv", logPrinter = Logger.tracing)
 }
 
-…
 
 Log.Web.warn("download failed")
 
 object Server {
-	import Log.{Server => Log}
-
-	Log.info("This is the server logger")
+  import Log.{Server => log}
+  log.info("This is the server logger")
 }
-
 ----
+
+This will print:
+[source]
+Warn : download failed [Web]
+This is the server logger [Serv].(Example.scala:24)
+
+Note:: that the info level does not have a prefix by default,
+use it to talk to your users.
+Note:: The server output has the file and line number attached,
+this results in clickable links if used inside IntelliJ.
+
+== Custom Formatting
+
+Creating a `Logger` takes a `LogPrinter` parameter, see `DefaultLogPrinter`
+for the default implementation, and feel free to implement your own custom
+formatting and output needs.
 
 
 == Contributing
