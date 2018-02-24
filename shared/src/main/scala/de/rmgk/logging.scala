@@ -13,8 +13,8 @@ object logging {
              ): Logger =
       new LoggerT[String](tag, level, logPrinter)
 
-    lazy val tracing = new DefaultLogPrinter[String](tracing = true)
-    lazy val noTracing = new DefaultLogPrinter[String](tracing = false)
+    lazy val tracing: DefaultLogPrinter[String] = new DefaultLogPrinter[String](tracing = true)
+    lazy val noTracing: DefaultLogPrinter[String] = new DefaultLogPrinter[String](tracing = false)
   }
 
 
@@ -76,7 +76,7 @@ object logging {
   class DefaultLogPrinter[T](val tracing: Boolean) extends LogPrinter[T] {
 
     def print(tag: T, l: Level, m: => Any, c: Context): Unit = {
-      Console.println(logline(tag, l, m, c))
+      println(logline(tag, l, m, c))
     }
 
     def logline(tag: T, l: Level, m: => Any, c: Context): String = {
