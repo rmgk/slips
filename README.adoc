@@ -82,7 +82,7 @@ This will print:
 Warn : download failed [Web]
 This is the server logger [Serv].(Example.scala:24)
 
-Note:: that the info level does not have a prefix by default,
+Note:: The info level does not have a prefix by default,
 use it to talk to your users.
 Note:: The server output has the file and line number attached,
 this results in clickable links if used inside IntelliJ.
