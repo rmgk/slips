@@ -42,7 +42,7 @@ import de.rmgk.logging.{Logger, Level}
 
 val log = Logger()
 // or
-val log = Logger(tag = "Prefixed to the output: ", level = Level.Debug)
+val log = Logger(tag = "Added to the output", level = Level.Debug)
 
 log.trace("text")
 log.debug("text")
