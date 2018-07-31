@@ -21,8 +21,9 @@ It provides some features such as tags, levels, and file and line information,
 but not much more is built in.
 
 The philosophy is, that simple logging does not need configuration files.
-And for complex logging configuration files are too limiting and complicated,
-so you can extend the logger using normal Scala code.
+And for complex logging configuration files are too limiting and complicated.
+Instead, this logger provides a simple but well-structured starting point
+which can grow together with the application. 
 
 
 == Dependencies
