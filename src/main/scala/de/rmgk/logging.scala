@@ -44,7 +44,7 @@ object logging {
 
   case class Context(file: sourcecode.File, line: sourcecode.Line)
   object Context {
-    @inline implicit def fromImplicit(implicit file: sourcecode.File, line: sourcecode.Line): Context = Context(file, line)
+    implicit def fromImplicit(implicit file: sourcecode.File, line: sourcecode.Line): Context = Context(file, line)
   }
 
   /** Existing log levels, each has a corresponding method in the [[Logger]] */
