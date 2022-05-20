@@ -1,6 +1,6 @@
 = Logging
-Ragnar Mogk, 2018-02-13, v0.1.0
-:libversion: 0.1.0
+Ragnar Mogk, 2022-05-21, v0.3.0
+:libversion: 0.3.0
 
 Sometimes, I want to log some text.
 
@@ -93,11 +93,3 @@ this results in clickable links if used inside IntelliJ.
 Creating a `Logger` takes a `LogPrinter` parameter, see `DefaultLogPrinter`
 for the default implementation, and feel free to implement your own custom
 formatting and output needs.
-
-
-== Contributing
-
-Issues and pull request welcome.
-
-I assume that some more flexible configuration will be needed at some point,
-feel free to contribute usecases.
