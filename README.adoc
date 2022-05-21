@@ -1,5 +1,4 @@
 = Logging
-Ragnar Mogk, 2022-05-21, v0.3.0
 :libversion: 0.3.0
 
 Sometimes, I want to log some text.
@@ -12,7 +11,7 @@ Sometimes, I want to log with source lines.
 
 But never do I want to log with XML.
 
-Also, it would be rather nice if Native image still worked,
+Also, it would be rather nice if ǹative image still worked,
 and I would not have dependency issues all the time.
 
 == Motivation
@@ -33,7 +32,7 @@ which can grow together with the application.
 
 [source,scala,subs="attributes"]
 resolvers += "jitpack" at "https://jitpack.io",
-libraryDependencies += "com.github.rmgk.logging" %%% "logging" % "{libversion}",
+libraryDependencies += "de.rmgk.logging" %%% "logging" % "{libversion}",
 
 == Usage
 
