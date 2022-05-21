@@ -12,6 +12,9 @@ Sometimes, I want to log with source lines.
 
 But never do I want to log with XML.
 
+Also, it would be rather nice if Native image still worked,
+and I would not have dependency issues all the time.
+
 == Motivation
 
 This is a very simple logging library,
@@ -23,14 +26,14 @@ but not much more is built in.
 The philosophy is, that simple logging does not need configuration files.
 And for complex logging configuration files are too limiting and complicated.
 Instead, this logger provides a simple but well-structured starting point
-which can grow together with the application. 
+which can grow together with the application.
 
 
 == Dependencies
 
 [source,scala,subs="attributes"]
-resolvers += Resolver.bintrayRepo("rmgk", "maven"),
-libraryDependencies += "de.rmgk" %%% "logging" % "{libversion}"
+resolvers += "jitpack" at "https://jitpack.io",
+libraryDependencies += "com.github.rmgk.logging" %%% "logging" % "{libversion}",
 
 == Usage
 

@@ -63,7 +63,7 @@ object logging {
   }
 
   /** Prints to stdout.
-    * Prints the level if it is not [[Info]].
+    * Prints the level if it is not [[Level.Info]].
     * Prints non empty tags.
     *
     * @param tracing add file and line number to log output if true
