@@ -11,7 +11,7 @@ Sometimes, I want to log with source lines.
 
 But never do I want to log with XML.
 
-Also, it would be rather nice if ǹative image still worked,
+Also, it would be rather nice if native image still worked,
 and I would not have dependency issues all the time.
 
 == Motivation
