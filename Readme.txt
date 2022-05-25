@@ -3,6 +3,8 @@ Changelog
 
 v0.4.0
 
+	This version starts putting more than just the logging library into this repo
+
 	Chain:
 	* add constant time concat collection implementaton (inspired by cats.data.chain)
 
