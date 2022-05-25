@@ -2,7 +2,7 @@ import Dependencies.*
 import Settings.*
 
 val commonSettings = Def.settings(
-  organization := "de.rmgk",
+  organization := "de.rmgk.slips",
   scalaVersion_3,
   strict
 )
