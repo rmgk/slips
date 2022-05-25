@@ -3,7 +3,7 @@ import Settings.*
 
 lazy val logging =
   crossProject(JSPlatform, JVMPlatform, NativePlatform)
-    .in(file(".")).settings(
+    .in(file("logging")).settings(
       name         := "logging",
       organization := "de.rmgk",
       scalaVersion_3,
