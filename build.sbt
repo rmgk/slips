@@ -1,17 +1,23 @@
 import Dependencies.*
 import Settings.*
 
-lazy val logging =
-  crossProject(JSPlatform, JVMPlatform, NativePlatform)
-    .in(file("logging")).settings(
-      name         := "logging",
-      organization := "de.rmgk",
-      scalaVersion_3,
-      commonCrossBuildVersions,
-      libraryDependencies += sourcecode.value,
-      strict
-    )
+val commonSettings = Def.settings(
+  organization := "de.rmgk",
+  scalaVersion_3,
+  strict
+)
 
-lazy val loggingJS     = logging.js
-lazy val loggingJVM    = logging.jvm
-lazy val loggingNative = logging.native
+lazy val logging = crossProject(JSPlatform, JVMPlatform, NativePlatform)
+  .in(file("logging")).settings(
+    name := "logging",
+    commonSettings,
+    commonCrossBuildVersions,
+    libraryDependencies += sourcecode.value,
+  )
+
+lazy val chain = crossProject(JSPlatform, JVMPlatform, NativePlatform)
+  .in(file("chain")).settings(
+    name := "chain",
+    crossScalaVersions := Seq(Versions.scala3),
+    commonSettings,
+  )
