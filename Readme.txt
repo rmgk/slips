@@ -1,6 +1,11 @@
 Changelog
 =========
 
+v0.4.1
+
+	Category:
+	* add associative (semigroup)
+
 v0.4.0
 
 	This version starts putting more than just the logging library into this repo

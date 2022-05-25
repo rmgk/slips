@@ -19,7 +19,7 @@ object Dependencies {
     val jsoniterScalaCore  = "2.13.24"
     val jsoniterScalaOld   = "2.13.3" // this is the latest version supporting Scala 2.11 and java 8
     val jsoup              = "1.15.1"
-    val munit              = "0.7.29"
+    val munit              = "1.0.0-M4"
     val normalizecss       = "8.0.1"
     val okHttp             = "4.9.3"
     val pprint             = "0.7.3"
