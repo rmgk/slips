@@ -2,8 +2,8 @@ package de.rmgk
 
 import de.rmgk.Chain.*
 
-import scala.collection.{IterableFactory, IterableFactoryDefaults, IterableOps, mutable}
 import scala.collection.immutable.Iterable
+import scala.collection.{IterableFactory, IterableFactoryDefaults, IterableOps, mutable}
 
 enum Chain[+A] extends Iterable[A], IterableOps[A, Chain, Chain[A]], IterableFactoryDefaults[A, Chain] {
 
@@ -23,6 +23,7 @@ enum Chain[+A] extends Iterable[A], IterableOps[A, Chain, Chain[A]], IterableFac
   def +:[B >: A](other: B): Chain[B]                             = Concat(one(other), this)
   def :+[B >: A](other: B): Chain[B]                             = Concat(this, one(other))
   override def concat[B >: A](suffix: IterableOnce[B]): Chain[B] = Concat(this, Chain.from(suffix))
+  override def ++:[B >: A](that: IterableOnce[B]): Chain[B] = Concat(Chain.from(that), this)
 
 }
 
