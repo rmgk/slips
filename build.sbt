@@ -4,11 +4,10 @@ import Settings.*
 val commonSettings = Def.settings(
   organization := "de.rmgk.slips",
   scalaVersion_3,
-  strict,
   libraryDependencies ++= List(munit.value, munitScalacheck.value)
 )
 
-lazy val logging = crossProject(JSPlatform, JVMPlatform, NativePlatform)
+lazy val logging = crossProject(JSPlatform, JVMPlatform)
   .in(file("logging")).settings(
     name := "logging",
     commonSettings,
@@ -16,16 +15,23 @@ lazy val logging = crossProject(JSPlatform, JVMPlatform, NativePlatform)
     libraryDependencies += sourcecode.value,
   )
 
-lazy val chain = crossProject(JSPlatform, JVMPlatform, NativePlatform)
+lazy val chain = crossProject(JSPlatform, JVMPlatform)
   .in(file("chain")).settings(
     name               := "chain",
     crossScalaVersions := Seq(Versions.scala3),
     commonSettings,
   )
 
-lazy val category = crossProject(JSPlatform, JVMPlatform, NativePlatform)
+lazy val category = crossProject(JSPlatform, JVMPlatform)
   .in(file("category")).settings(
     name               := "category",
+    crossScalaVersions := Seq(Versions.scala3),
+    commonSettings,
+  )
+
+lazy val scip = crossProject(JSPlatform, JVMPlatform)
+  .in(file("scip")).settings(
+    name               := "scip",
     crossScalaVersions := Seq(Versions.scala3),
     commonSettings,
   )
