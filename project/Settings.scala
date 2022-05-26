@@ -49,7 +49,7 @@ object Settings {
 
   def settingsFor(version: String) =
     version match {
-      case a if a.startsWith("2.13") => List("-print-tasty")
+      case a if a.startsWith("2.13") => List("-Ytasty-reader")
       case other => Nil
     }
 
