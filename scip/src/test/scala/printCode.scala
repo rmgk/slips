@@ -1,5 +1,3 @@
-package scitzen.scip
-
 import scala.quoted.*
 
 inline def printCode[T](inline expr: T): Unit =
@@ -13,8 +11,8 @@ def impl[T: Type](expr: Expr[T])(using quotes: Quotes): Expr[Unit] = {
   println(e)
   //println(t)
   '{
-    println(${ Expr(e.length) })
-    //println(${Expr(t.length)})
+  println(${ Expr(e) })
+  //println(${Expr(t.length)})
   }
 
 }
