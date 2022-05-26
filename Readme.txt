@@ -1,6 +1,11 @@
 Changelog
 =========
 
+v0.next
+
+	Scip
+	* add simple parsing library that experiments with metaprogramming
+
 v0.4.1
 
 	Category:

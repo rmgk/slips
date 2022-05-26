@@ -22,25 +22,33 @@ object scip {
     def fail(msg: => String): Nothing =
       throw new ScipEx(s"$msg\nat: »${input.view.slice(index, index + 42).str}«")
 
-    def ahead(i: Int): Byte                 = input(index + i)
+    def ahead(i: Int): Byte = input(index + i)
+
     def slice(i: Int): IndexedSeqView[Byte] = input.view.slice(index, index + 1)
+
     def assertAvailable(len: Int): Unit =
       val rem = input.length - index - len
       if rem < 0 then fail(s"end of input reached, but ${-rem} more bytes requested")
 
     val EOT: Byte = 3.toByte
 
-    def readSafe: Byte    = if index < input.length then input(index) else EOT
+    def readSafe: Byte = if index < input.length then input(index) else EOT
+
     inline def peek: Byte = input(index)
+
     def next: Boolean =
       index += 1
       index < input.length
 
     inline def containsNext(inline p: Byte => Boolean): Boolean =
       index < input.length && p(peek) && { index += 1; true }
+
     def assertNext(b: Byte): Unit =
-      input(index) == b || fail(s"expected $b")
+      assertAt(0, b)
       index += 1
+
+    def assertAt(i: Int, b: Byte): Unit =
+      input(index + i) == b || fail(s"expected $b")
   }
   object Scx {
     def apply(s: String): Scx = Scx(s.getBytes(UTF_8), 0, 0)
@@ -99,17 +107,19 @@ object scip {
     s.value match
       case None => '{ exact($s.getBytes(UTF_8)) }
       case Some(v) =>
-        val bytes = v.getBytes(UTF_8).toList
-        '{
-          Scip { (scx: Scx) ?=>
-            ${
-              val stmts: List[Statement] = bytes.map(b => '{ scx.assertNext(${ Expr(b) }) }.asTerm)
-              val (start, last)          = stmts.splitAt(stmts.length - 1)
-              (if start.isEmpty then last.head
-               else Block(start, last.head.asInstanceOf[Term])).asExprOf[Unit]
+        val bytes = v.getBytes(UTF_8)
+        if (bytes.length > 4) then '{ exact(${ Expr(bytes) }) }
+        else
+          '{
+            Scip { (scx: Scx) ?=>
+              ${
+                val stmts: List[Statement] = bytes.iterator.map(b => '{ scx.assertNext(${ Expr(b) }) }.asTerm).toList
+                val (start, last)          = stmts.splitAt(stmts.length - 1)
+                (if start.isEmpty then last.head
+                 else Block(start, last.head.asInstanceOf[Term])).asExprOf[Unit]
+              }
             }
           }
-        }
 
   inline def exact(b: Array[Byte]): Scip[Unit] = Scip {
     val len = b.length
