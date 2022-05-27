@@ -1,30 +1,38 @@
 package de.rmgk
 
 import java.nio.charset.StandardCharsets.UTF_8
-import scala.annotation.tailrec
+import scala.annotation.{switch, tailrec}
 import scala.collection.IndexedSeqView
 import scala.collection.mutable.ListBuffer
 import scala.compiletime.erasedValue
 import scala.quoted.*
+import scala.util.NotGiven
 import scala.util.control.ControlThrowable
 
 object scip {
 
-  class ScipEx(message: => String) extends ControlThrowable {
-    override def getMessage: String = message
-  }
+  trait ScipEx extends ControlThrowable
 
   case class Scx(
       val input: Array[Byte],
       var index: Int,
       var goodIndex: Int,
   ) {
+
+    object ScipExInstance extends ScipEx {
+      var message = () => "no error"
+      override def getMessage: String = message()
+    }
+
     def fail(msg: => String): Nothing =
-      throw new ScipEx(s"$msg\nat: »${input.view.slice(index, index + 42).str}«")
+      ScipExInstance.message = () => s"$msg\nat: »${input.view.slice(index, index + 42).str}«"
+      throw ScipExInstance
 
     def ahead(i: Int): Byte = input(index + i)
 
     def slice(i: Int): IndexedSeqView[Byte] = input.view.slice(index, index + 1)
+
+    def available: Int = input.length - index
 
     def assertAvailable(len: Int): Unit =
       val rem = input.length - index - len
@@ -48,8 +56,43 @@ object scip {
       index += 1
 
     def assertAt(i: Int, b: Byte): Unit =
-      input(index + i) == b || fail(s"expected $b")
+      val next = index + i
+      (next < input.length && input(next) == b) || fail(s"expected $b")
+
+    inline def intPred(inline p: Int => Boolean): Int = {
+      val b = peek & 0xff
+      if (b & Utf8bits.maxBit) == 0 then if p(b) then 1 else 0
+      else
+        val count = highest4(b)
+        val v = (count: @switch) match
+          case 2 => parse2(b)
+          case 3 => parse3(b)
+          case 4 => parse4(b)
+        if (p(v)) count else 0
+    }
+
+    private def parse2(b: Int): Int = Utf8bits.grab(Utf8bits.addLowest(b, 0, 5), 1, 2)
+    private def parse3(b: Int): Int = Utf8bits.grab(Utf8bits.addLowest(b, 0, 4), 1, 3)
+    private def parse4(b: Int): Int = Utf8bits.grab(Utf8bits.addLowest(b, 0, 3), 1, 4)
+    private def highest4(b: Int)    = Utf8bits.highest(b, 4)
+
+    object Utf8bits {
+
+      inline val maxBit: 128                               = 1 << 7
+      inline def lowest(inline b: Int, inline n: Int): Int = b & ((1 << n) - 1)
+      inline def bitAt(b: Int, inline pos: Int): Int       = (b & maxBit) >>> (7 - pos)
+      inline def addLowest(b: Int, acc: Int, n: Int): Int  = lowest(b, n) | (acc << n)
+      inline def grab(acc: Int, inline pos: Int, inline max: Int): Int =
+        inline if (pos >= max) then acc
+        else grab(addLowest(ahead(pos) & 0xff, acc, 6), pos + 1, max)
+      inline def highest(b: Int, inline depth: Int): Int =
+        inline if depth <= 0 then 0
+        else
+          val isSet: Int = ((b & maxBit) >>> 7)
+          isSet + isSet * highest(b << 1, depth - 1)
+    }
   }
+
   object Scx {
     def apply(s: String): Scx = Scx(s.getBytes(UTF_8), 0, 0)
   }
@@ -64,9 +107,12 @@ object scip {
 
   extension [A](inline scip: Scip[A]) {
     inline def run(using inline scx: Scx): A = scip.run0(scx)
-    inline def ~[B](inline other: Scip[B]): Scip[Unit] = Scip { scx ?=>
+    inline def ~[B](inline other: Scip[B]): Scip[Unit] = Scip {
       scip.run
       other.run
+    }
+    inline def opt: Scip[Option[A]] = Scip {
+      scip.map(Some.apply).orElse(Option.empty).run
     }
     inline def capture: Scip[IndexedSeqView[Byte]] = Scip {
       val start = scx.index
@@ -86,40 +132,56 @@ object scip {
       if start == scx.index then scx.fail("parsed nothing")
       res
     }
-    inline def runOrElse(inline b: A): Scip[A] = Scip {
+    inline def orElse[B >: A](inline b: B): Scip[B] = Scip {
+      val start = scx.index
       try scip.run
-      catch case e: ScipEx => b
+      catch
+        case e: ScipEx =>
+          scx.index = start
+          b
     }
+    inline def orNull: Scip[A | Null] = scip.orElse[A | Null](null)
     inline def lookahead: Scip[A] = Scip {
       val start = scx.index
       try scip.run
       finally scx.index = start
     }
-    inline def test: Scip[Boolean] = Scip {
-      try { scip.run; true }
-      catch case e: ScipEx => false
+    inline def ? : Scip[Boolean] = scip.map(_ => true).orElse(false)
+  }
+
+  inline def whileRange(lo: Int, hi: Int): Scip[Unit] = whilePred(b => lo <= b && b <= hi)
+  inline def pred(inline p: Int => Boolean): Scip[Boolean] = Scip {
+    scx.available > 0 && {
+      val read = scx.intPred(p)
+      scx.index += read
+      read > 0
     }
   }
 
-  extension (s: String) inline def scip: Scip[Unit] = ${ exactImpl('s) }
-  def exactImpl(s: Expr[String])(using quotes: Quotes): Expr[Scip[Unit]] =
+  extension (s: String) inline def scip: Scip[Unit] = ${ stringMatchImpl('s) }
+  def stringMatchImpl(s: Expr[String])(using quotes: Quotes): Expr[Scip[Unit]] =
     import quotes.reflect.*
     s.value match
-      case None => '{ exact($s.getBytes(UTF_8)) }
-      case Some(v) =>
-        val bytes = v.getBytes(UTF_8)
-        if (bytes.length > 4) then '{ exact(${ Expr(bytes) }) }
-        else
-          '{
-            Scip { (scx: Scx) ?=>
-              ${
-                val stmts: List[Statement] = bytes.iterator.map(b => '{ scx.assertNext(${ Expr(b) }) }.asTerm).toList
-                val (start, last)          = stmts.splitAt(stmts.length - 1)
-                (if start.isEmpty then last.head
-                 else Block(start, last.head.asInstanceOf[Term])).asExprOf[Unit]
-              }
-            }
+      case None =>
+        report.warning(s"value is not constant", s)
+        '{ exact($s.getBytes(UTF_8)) }
+      case Some(v) => bytesMatchImpl(v.getBytes(UTF_8))
+
+  def bytesMatchImpl(bytes: Array[Byte])(using quotes: Quotes): Expr[Scip[Unit]] = {
+    import quotes.reflect.*
+    if (bytes.length > 4) then '{ exact(${ Expr(bytes) }) }
+    else
+      '{
+        Scip { (scx: Scx) ?=>
+          ${
+            val stmts: List[Statement] = bytes.iterator.map(b => '{ scx.assertNext(${ Expr(b) }) }.asTerm).toList
+            val (start, last)          = stmts.splitAt(stmts.length - 1)
+            (if start.isEmpty then last.head
+             else Block(start, last.head.asInstanceOf[Term])).asExprOf[Unit]
           }
+        }
+      }
+  }
 
   inline def exact(b: Array[Byte]): Scip[Unit] = Scip {
     val len = b.length
@@ -132,20 +194,15 @@ object scip {
     scx.index += len
   }
 
-  inline def characters: Scip[Unit] = Scip {
-    while scx.containsNext(byte => ('a' <= byte && byte <= 'z') || ('A' <= byte && byte <= 'Z')) do ()
+  inline def whilePred(inline p: Int => Boolean): Scip[Unit] = Scip {
+    var matches = 0
+    while pred(p).run do matches += 1
+    if matches == 0 then scx.fail("must match at least once")
   }
 
-  inline def whitespace: Scip[Unit] = Scip { while Character.isWhitespace(scx.readSafe) do scx.index += 1 }
+  inline def whitespace: Scip[Unit] = whilePred(Character.isWhitespace)
 
   inline def choice[T](inline alternatives: Scip[T]*): Scip[T] = ${ choiceImpl('alternatives) }
-  // Scip { scx ?=>
-  //  @tailrec
-  //  def rec(l: List[Scip[T]]): T = l match
-  //    case Nil               => scx.fail(s"no alternative matches")
-  //    case (h: Scip[T]) :: t => h.runOrElse { rec(t) }.run
-  //  rec(alternatives.toList)
-  // }
 
   def choiceImpl[T: Type](alternatives: Expr[Seq[Scip[T]]])(using quotes: Quotes): Expr[Scip[T]] = {
     import quotes.reflect.*
@@ -155,7 +212,7 @@ object scip {
             ${
               args.foldRight[Expr[T]]('{ scx.fail("no alternative matched") }) { (next: Expr[Scip[T]], acc) =>
                 '{
-                  ($next.runOrElse(null.asInstanceOf[T]).run(using scx): T) match
+                  $next.orNull.run(using scx) match
                     case null   => $acc
                     case res: T => res
                 }
@@ -166,7 +223,7 @@ object scip {
   }
 
   inline def until(inline end: Scip[Any]): Scip[Unit] = Scip {
-    while !end.test.run && scx.next do ()
+    while !end.?.lookahead.run && scx.next do ()
   }
 
   extension (isv: IndexedSeqView[Byte]) {
@@ -174,6 +231,9 @@ object scip {
   }
   extension (inline isv: Scip[IndexedSeqView[Byte]]) {
     inline def str: Scip[String] = isv.map(_.str)
+  }
+  extension (inline scip: Scip[Unit]) {
+    inline def ! : Scip[String] = scip.capture.str
   }
 
   inline def unitOpt[T, A](inline normal: A): A =
