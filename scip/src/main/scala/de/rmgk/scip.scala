@@ -1,5 +1,6 @@
 package de.rmgk
 
+import java.nio.charset.StandardCharsets
 import java.nio.charset.StandardCharsets.UTF_8
 import scala.annotation.{switch, tailrec}
 import scala.collection.IndexedSeqView
@@ -8,6 +9,7 @@ import scala.compiletime.erasedValue
 import scala.quoted.*
 import scala.util.NotGiven
 import scala.util.control.ControlThrowable
+import scala.Tuple.*
 
 object scip {
 
@@ -108,12 +110,35 @@ object scip {
 
   inline def scx(using inline scx0: Scx): scx0.type = scx0
 
+  type FlatConcat[A, B] = A match
+    case Unit => B
+    case _    => FlatConcat2[A, B]
+  type FlatConcat2[A, B] = B match
+    case Unit  => A
+    case b *: bs => A *: b *: bs
+    case _     => (A, B)
+
+  inline def flatConcat[A, B](a: A, b: B): FlatConcat[A, B] =
+    inline erasedValue[A] match
+      case _: Unit => b
+      case _ => flatConcat2[A, B](a, b)
+
+  inline def flatConcat2[A, B](a: A, b: B): FlatConcat2[A, B] =
+    inline b match
+      case _: Unit  => a
+      case bs: *:[x, y] => (a *: bs)
+      case _: Any   => (a, b)
+
   extension [A](inline scip: Scip[A]) {
     inline def run(using inline scx: Scx): A = scip.run0(scx)
-    inline def ~[B](inline other: Scip[B]): Scip[Unit] = Scip {
-      scip.run
-      other.run
+    inline def ~[B](inline other: Scip[B]): Scip[FlatConcat[A, B]] = Scip {
+      val a = scip.run
+      val b = other.run
+      flatConcat(a, b)
     }
+    // inline def <~>[B <: Tuple](inline other: Scip[B]): Scip[A *: B] = Scip { scip.run *: other.run }
+    // inline def ~>[B](inline other: Scip[B]): Scip[B] = Scip {scip.run; other.run}
+    // inline def <~[B](inline other: Scip[B]): Scip[A] = Scip { val res = scip.run; other.run; res }
     inline def opt: Scip[Option[A]] = Scip {
       scip.map(Some.apply).orElse(Option.empty).run
     }
@@ -124,11 +149,6 @@ object scip {
       scx.input.view.slice(start, end)
     }
     inline def map[B](inline f: A => B): Scip[B] = Scip { f(scip.run) }
-    inline def accept: Scip[A] = Scip {
-      val res = scip.run
-      scx.goodIndex = scx.index
-      res
-    }
     inline def parseNonEmpty: Scip[A] = Scip {
       val start = scx.index
       val res   = scip.run
@@ -149,10 +169,50 @@ object scip {
       try scip.run
       finally scx.index = start
     }
-    inline def ? : Scip[Boolean] = scip.map(_ => true).orElse(false)
+    inline def attempt: Scip[Boolean] = scip.map(_ => true).orElse(false)
+
+    inline def drop: Scip[Unit] = scip.map(_ => ())
+
+    inline def list(inline sep: Scip[Unit]): Scip[List[A]] = Scip {
+      val acc = ListBuffer.empty[A]
+      try
+        var continue = true
+        while continue do
+          val start = scx.index
+          val res   = scip.run
+          acc.addOne(res)
+          sep.run
+          continue = start < scx.index
+        acc.toList
+      catch
+        case e: ScipEx =>
+          acc.toList
+    }
+
+    inline def require(inline check: A => Boolean): Scip[A] = Scip {
+      val res = scip.run
+      if check(res) then res else scx.fail(s"required: ${scala.compiletime.codeOf(check)}")
+    }
+
   }
 
-  inline def whileRange(lo: Int, hi: Int): Scip[Unit] = whilePred(b => lo <= b && b <= hi)
+  extension (inline scip: Scip[Boolean]) {
+    inline def falseFail(msg: => String): Scip[Unit] = Scip {
+      scip.run match
+        case true  => ()
+        case false => scx.fail(msg)
+    }
+    inline def rep: Scip[Int] = Scip {
+      var matches = 0
+      while scip.run do matches += 1
+      matches
+    }
+  }
+  extension (inline scip: Scip[Unit]) {
+    inline def str: Scip[String] = scip.capture.map(_.str)
+  }
+
+  inline def whileRange(lo: Int, hi: Int): Scip[Unit] = pred(b => lo <= b && b <= hi).rep.drop
   inline def pred(inline p: Int => Boolean): Scip[Boolean] = Scip {
     scx.available > 0 && {
       val read = scx.intPred(p)
@@ -161,49 +221,11 @@ object scip {
     }
   }
 
-  extension (s: String) inline def scip: Scip[Unit] = ${ stringMatchImpl('s) }
-  def stringMatchImpl(s: Expr[String])(using quotes: Quotes): Expr[Scip[Unit]] =
-    import quotes.reflect.*
-    s.value match
-      case None =>
-        // report.warning(s"value is not constant", s)
-        '{ exact($s.getBytes(UTF_8)) }
-      case Some(v) => bytesMatchImpl(v.getBytes(UTF_8))
-
-  def bytesMatchImpl(bytes: Array[Byte])(using quotes: Quotes): Expr[Scip[Unit]] = {
-    import quotes.reflect.*
-    if (bytes.length > 4) then '{ exact(${ Expr(bytes) }) }
-    else
-      '{
-        Scip { (scx: Scx) ?=>
-          ${
-            val stmts: List[Statement] = bytes.iterator.map(b => '{ scx.assertNext(${ Expr(b) }) }.asTerm).toList
-            val (start, last)          = stmts.splitAt(stmts.length - 1)
-            (if start.isEmpty then last.head
-             else Block(start, last.head.asInstanceOf[Term])).asExprOf[Unit]
-          }
-        }
-      }
+  inline def until(inline end: Scip[Any]): Scip[Unit] = Scip {
+    while !end.attempt.lookahead.run && scx.next do ()
   }
 
-  inline def exact(b: Array[Byte]): Scip[Unit] = Scip {
-    val len = b.length
-    scx.assertAvailable(len)
-    var i = 0
-    while i < len
-    do
-      if b(i) != scx.ahead(i) then scx.fail(s"input ahead »${scx.slice(len).str}« did not match »${b.view.str}« ")
-      i += 1
-    scx.index += len
-  }
-
-  inline def whilePred(inline p: Int => Boolean): Scip[Unit] = Scip {
-    var matches = 0
-    while pred(p).run do matches += 1
-    if matches == 0 then scx.fail("must match at least once")
-  }
-
-  inline def whitespace: Scip[Unit] = whilePred(Character.isWhitespace)
+  inline def whitespace: Scip[Unit] = pred(Character.isWhitespace).rep.require(_ > 0).drop
 
   inline def choice[T](inline alternatives: Scip[T]*): Scip[T] = ${ choiceImpl('alternatives) }
 
@@ -225,39 +247,46 @@ object scip {
         }
   }
 
-  inline def until(inline end: Scip[Any]): Scip[Unit] = Scip {
-    while !end.?.lookahead.run && scx.next do ()
-  }
-
   extension (isv: IndexedSeqView[Byte]) {
     def str: String = new String(isv.toArray, UTF_8)
   }
-  extension (inline isv: Scip[IndexedSeqView[Byte]]) {
-    inline def str: Scip[String] = isv.map(_.str)
-  }
-  extension (inline scip: Scip[Unit]) {
-    inline def ! : Scip[String] = scip.capture.str
+
+  extension (s: String) inline def scip: Scip[Unit] = ${ stringMatchImpl('s) }
+  def stringMatchImpl(s: Expr[String])(using quotes: Quotes): Expr[Scip[Unit]] =
+    import quotes.reflect.*
+    s.value match
+      case None =>
+        report.warning(s"value is not constant", s)
+        '{ exact($s.getBytes(UTF_8)) }
+      case Some(v) => bytesMatchImpl(v.getBytes(UTF_8))
+
+  def bytesMatchImpl(bytes: Array[Byte])(using quotes: Quotes): Expr[Scip[Unit]] = {
+    import quotes.reflect.*
+    if (bytes.length > 4) then '{ exact(${ Expr(bytes) }) }
+    else
+      '{
+        Scip { (scx: Scx) ?=>
+          ${
+            val stmts: List[Statement] = bytes.iterator.map(b => '{ scx.assertNext(${ Expr(b) }) }.asTerm).toList
+            val (start, last)          = stmts.splitAt(stmts.length - 1)
+            (if start.isEmpty then last.head
+             else Block(start, last.head.asInstanceOf[Term])).asExprOf[Unit]
+          }
+        }
+      }
   }
 
-  inline def unitOpt[T, A](inline normal: A): A =
-    inline erasedValue[T] match
-      case _: Unit => null.asInstanceOf[A]
-      case other   => normal
+  inline def exact(b: String): Scip[Unit] = exact(b.getBytes(StandardCharsets.UTF_8))
 
-  inline def repeat[A](inline it: Scip[A], inline sep: Scip[Any], min: Int): Scip[List[A]] = Scip {
-    var continue = true
-    val acc      = unitOpt[A, ListBuffer[A]](ListBuffer.empty[A])
-    var count    = 0
-    while continue do
-      try
-        val res = it.run
-        count += 1
-        unitOpt[A, ListBuffer[A]](acc.addOne(res))
-        sep.run
-      catch case e: ScipEx => continue = false
-    val res = unitOpt[A, List[A]](acc.toList)
-    if (count < min) scx.fail(s"repeat $min")
-    if res == null then Nil else res
+  inline def exact(b: Array[Byte]): Scip[Unit] = Scip {
+    val len = b.length
+    scx.assertAvailable(len)
+    var i = 0
+    while i < len
+    do
+      if b(i) != scx.ahead(i) then scx.fail(s"input ahead »${scx.slice(len).str}« did not match »${b.view.str}« ")
+      i += 1
+    scx.index += len
   }
 
 }

@@ -4,7 +4,7 @@ class SimpleTest extends munit.FunSuite {
 
   test("chain") {
     given scx: Scx = Scx("abc")
-    val res        = ("a".scip ~ "b".scip ~ "c".scip).capture.str.run
+    val res        = ("a".scip ~ "b".scip ~ "c".scip).str.run
     assertEquals(scx.index, scx.input.length)
     assertEquals(res, "abc")
   }
@@ -12,7 +12,7 @@ class SimpleTest extends munit.FunSuite {
   test("long match") {
     inline val input = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
     given scx: Scx   = Scx(input)
-    val res          = input.scip.capture.str.run
+    val res          = input.scip.str.run
     assertEquals(scx.index, scx.input.length)
     assertEquals(res, "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")
   }
@@ -29,7 +29,7 @@ class SimpleTest extends munit.FunSuite {
 
   test("time") {
 
-    val dig = TimeParsers.digits.!.run(using Scx("1234"))
+    val dig = TimeParsers.digits.str.run(using Scx("1234"))
 
     assertEquals(dig, "1234")
 
@@ -43,6 +43,14 @@ class SimpleTest extends munit.FunSuite {
     val dtparsed = TimeParsers.dateTime.run(using Scx(dt.full))
 
     assertEquals(dtparsed, dt)
+  }
+
+  test("sequence") {
+    val as = "a".scip.attempt.rep
+    val bs = "b".scip.attempt.rep
+    println(printCode(as ~ bs))
+    val res = (as ~ bs).run(using Scx("aaaabbbbb"))
+    assertEquals(res, (4,5))
   }
 
 }
@@ -70,20 +78,20 @@ object ScitzenDateTime {
 object TimeParsers {
   val digits: Scip[Unit] = whileRange('0', '9')
   val date: Scip[ScitzenDate] = Scip {
-    val y = digits.!.run
+    val y = digits.str.run
     "-".scip.run
-    val m = digits.!.run
+    val m = digits.str.run
     "-".scip.run
-    val d = digits.!.run
+    val d = digits.str.run
     ScitzenDate(y, m, d)
   }
   val time = Scip {
     val res = ScitzenTime(
-      digits.!.run,
-      { ":".scip.run; digits.!.run },
-      { ":".scip.run; digits.!.run }
+      digits.str.run,
+      { ":".scip.run; digits.str.run },
+      { ":".scip.run; digits.str.run }
     )
-    (".".scip ~ digits).?.run
+    (".".scip ~ digits).attempt.run
     res
   }
   val timezone = "+".scip ~ digits ~ ":".scip ~ digits
@@ -91,10 +99,10 @@ object TimeParsers {
     val sdate = date.run
     val stime = Scip {
       println(scx.index)
-      println(s"choice: »${choice("T".scip, whitespace).!.run}«")
+      println(s"choice: »${choice("T".scip, whitespace).str.run}«")
       println(scx.index)
       val t = time.run
-      timezone.?.run
+      timezone.attempt.run
       t
     }.opt.run
 
