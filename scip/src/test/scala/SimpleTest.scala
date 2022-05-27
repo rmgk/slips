@@ -2,7 +2,6 @@ import de.rmgk.scip.*
 
 class SimpleTest extends munit.FunSuite {
 
-
   test("chain") {
     given scx: Scx = Scx("abc")
     val res        = ("a".scip ~: "b".scip ~: "c".scip).str.run
@@ -53,7 +52,6 @@ class SimpleTest extends munit.FunSuite {
     val res = (as ~: bs).run(using Scx("aaaabbbbb"))
     assertEquals(res, (4, 5))
 
-
     val res2 = (as ~: bs ~: cs).run(using Scx("aaaabbbbbcc"))
 
     assertEquals(res2, (4, 5, 2))
@@ -85,6 +83,16 @@ class SimpleTest extends munit.FunSuite {
 
     val res = parse.run(using Scx("abc"))
     assertEquals(res, ("a", "b", "c"))
+  }
+
+  test("alternatives") {
+
+    inline def p = "abc".any.rep
+
+    println(printCode(p))
+
+    val res = p.run0(Scx("abcaaabc"))
+    assertEquals(res, 8)
   }
 
 }

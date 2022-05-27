@@ -116,9 +116,9 @@ object scip {
   type FlatConcat[A, B] = A match
     case Unit => B
     case _ => B match
-      case Unit => A
-      case b *: bs => A *: b *: bs
-      case _       => (A, B)
+        case Unit    => A
+        case b *: bs => A *: b *: bs
+        case _       => (A, B)
 
   inline def flatConcat[A, B](a: A, b: B): FlatConcat[A, B] =
     summonFrom {
@@ -129,12 +129,12 @@ object scip {
     }
 
   extension [A](inline scip: Scip[A]) {
-    inline def run(using inline scx: Scx): A = scip.run0(scx)
+    inline def run(using inline scx: Scx): A                        = scip.run0(scx)
     inline def ~:[B](inline other: Scip[B]): Scip[FlatConcat[A, B]] = Scip { flatConcat(scip.run, other.run) }
-    inline def ~[B](inline other: Scip[B]): Scip[Unit] = Scip { {scip.run; other.run} }
-    inline def <~[B](inline other: Scip[B]): Scip[A] = Scip { {val a = scip.run; other.run; a} }
-    inline def ~>[B](inline other: Scip[B]): Scip[B] = Scip { {scip.run; other.run} }
-    inline def <~>[B](inline other: Scip[B]): Scip[(A, B)] = Scip { (scip.run, other.run) }
+    inline def ~[B](inline other: Scip[B]): Scip[Unit]              = Scip { { scip.run; other.run } }
+    inline def <~[B](inline other: Scip[B]): Scip[A]                = Scip { { val a = scip.run; other.run; a } }
+    inline def ~>[B](inline other: Scip[B]): Scip[B]                = Scip { { scip.run; other.run } }
+    inline def <~>[B](inline other: Scip[B]): Scip[(A, B)]          = Scip { (scip.run, other.run) }
 
     inline def opt: Scip[Option[A]] = Scip {
       scip.map(Some.apply).orElse(Option.empty).run
@@ -267,7 +267,10 @@ object scip {
     def str: String = new String(isv.toArray, UTF_8)
   }
 
-  extension (s: String) inline def scip: Scip[Unit] = ${ stringMatchImpl('s) }
+  extension (s: String) {
+    inline def scip: Scip[Unit]   = ${ stringMatchImpl('s) }
+    inline def any: Scip[Boolean] = ${ stringAltImpl('s) }
+  }
   def stringMatchImpl(s: Expr[String])(using quotes: Quotes): Expr[Scip[Unit]] =
     import quotes.reflect.*
     s.value match
@@ -290,6 +293,32 @@ object scip {
           }
         }
       }
+  }
+
+  def stringAltImpl(s: Expr[String])(using quotes: Quotes): Expr[Scip[Boolean]] =
+    import quotes.reflect.*
+    s.value match
+      case None =>
+        report.errorAndAbort(s"value is not constant", s)
+      case Some(v) => bytesAltImpl(v.getBytes(UTF_8))
+
+  def bytesAltImpl(bytes: Array[Byte])(using quotes: Quotes): Expr[Scip[Boolean]] = {
+    import quotes.reflect.*
+    '{
+      Scip { (scx: Scx) ?=>
+        if (scx.available <= 0) false
+        else ${
+          val alternatives = Alternatives(bytes.sorted.distinct.toList.map { b => Expr(b).asTerm })
+          Match(
+            '{ scx.peek }.asTerm,
+            List(
+              CaseDef(alternatives, None, '{ scx.index += 1; true }.asTerm),
+              CaseDef(Wildcard(), None, '{ false }.asTerm)
+            )
+          ).asExprOf[Boolean]
+        }
+      }
+    }
   }
 
   inline def exact(b: String): Scip[Unit] = exact(b.getBytes(StandardCharsets.UTF_8))
