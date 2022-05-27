@@ -1,0 +1,42 @@
+ type NotUnit[X] <: Boolean = X match
+    case Unit => false
+    case _    => true
+  extension [Tup <: Tuple: Tuple.IsMappedBy[Scip]](inline scips: Tup)(using pm: Mirror.ProductOf[Tup]) {
+    transparent inline def sequence: Scip[Tuple.Filter[Tuple.InverseMap[Tup, Scip], NotUnit]] = ${ sequenceImpl('scips) }
+  }
+
+  //transparent inline def sequence(inline scips: Scip[Any]*): Scip[Tuple] = ${ sequenceImpl('scips) }
+
+  def untuple[T](expr: Expr[Tuple])(using Quotes): Option[Seq[Expr[Any]]] = {
+    import quotes.reflect._
+    def rec(tree: Term): Option[Seq[Expr[T]]] = tree match {
+      case Repeated(elems, _) => Some(elems.map(x => x.asExpr.asInstanceOf[Expr[T]]))
+      case Typed(e, _) => rec(e)
+      case Block(Nil, e) => rec(e)
+      case Inlined(_, Nil, e) => rec(e)
+      case _  => None
+    }
+    rec(expr.asTerm)
+  }
+
+  def sequenceImpl[Cast: Type](scips: Expr[Tuple])(using quotes: Quotes): Expr[Scip[Cast]] = {
+    import quotes.reflect.*
+    untuple(scips) match
+      case Some(exprs) =>
+        '{
+          Scip { scx ?=>
+            ${
+              val runs = exprs.map { e => '{ ${ e.asExprOf[Scip[Any]] }.run }.asTerm }.toList
+              ValDef.let(Symbol.spliceOwner, runs) { refs =>
+                val nonUnit = (refs zip exprs).collect {
+                  case (ref, '{ $x: Scip[t] }) if !(TypeRepr.of[t] =:= TypeRepr.of[Unit]) =>
+                    println(s"collect »${x.asTerm.show}« (ref ${ref.show}) ${TypeRepr.of[t]}")
+                    ref.asExpr
+                }
+                Expr.ofTupleFromSeq(nonUnit).asTerm
+              }.asExprOf[Cast]
+            }
+          }
+        }
+      case other => report.errorAndAbort(s"not varargs ${scips.show}", scips)
+  }

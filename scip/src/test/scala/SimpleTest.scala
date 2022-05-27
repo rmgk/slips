@@ -4,7 +4,7 @@ class SimpleTest extends munit.FunSuite {
 
   test("chain") {
     given scx: Scx = Scx("abc")
-    val res        = ("a".scip ~ "b".scip ~ "c".scip).str.run
+    val res        = ("a".scip ~> "b".scip ~> "c".scip).str.run
     assertEquals(scx.index, scx.input.length)
     assertEquals(res, "abc")
   }
@@ -46,11 +46,40 @@ class SimpleTest extends munit.FunSuite {
   }
 
   test("sequence") {
-    val as = "a".scip.attempt.rep
-    val bs = "b".scip.attempt.rep
-    println(printCode(as ~ bs))
-    val res = (as ~ bs).run(using Scx("aaaabbbbb"))
-    assertEquals(res, (4,5))
+    val as  = "a".scip.attempt.rep
+    val bs  = "b".scip.attempt.rep
+    val cs  = "c".scip.attempt.rep
+    val res = (as ~: bs.tup).run(using Scx("aaaabbbbb"))
+    assertEquals(res, (4, 5))
+
+
+    val res2 = (as ~: bs ~: cs.tup).run(using Scx("aaaabbbbbcc"))
+    assertEquals(res2, (4, 5, 2))
+  }
+
+  test("flatten") {
+    def as    = "a".scip.attempt.rep
+    def parse = as.flatMap { count => "b".scip.attempt.rep.require(_ == count) }
+    val res   = parse.run(using Scx("aaaabbbb"))
+    assertEquals(res, 4)
+  }
+
+  test("flatmap") {
+
+    val ap = "a".scip.str
+    val bp = "b".scip.str
+    val cp = "c".scip.str
+
+    inline def parse =
+      for
+        a <- ap
+        b <- bp
+        c <- cp
+      yield (a, b, c)
+    // println(printCode(parse))
+
+    val res = parse.run(using Scx("abc"))
+    assertEquals(res, ("a", "b", "c"))
   }
 
 }
@@ -60,7 +89,7 @@ case class ScitzenDate(year: String, month: String, day: String) {
 }
 case class ScitzenTime(hour: String, minute: String, second: String) {
   def short = s"$hour:$minute"
-  def full = s"$hour:$minute:$second"
+  def full  = s"$hour:$minute:$second"
   def iso   = s"$hour:$minute:${second}Z"
 }
 case class ScitzenDateTime(date: ScitzenDate, timeO: Option[ScitzenTime]) {
@@ -88,26 +117,21 @@ object TimeParsers {
   val time = Scip {
     val res = ScitzenTime(
       digits.str.run,
-      { ":".scip.run; digits.str.run },
-      { ":".scip.run; digits.str.run }
+      (":".scip ~> digits.str).run,
+      (":".scip ~> digits.str).run
     )
-    (".".scip ~ digits).attempt.run
+    (".".scip ~> digits).attempt.run
     res
   }
-  val timezone = "+".scip ~ digits ~ ":".scip ~ digits
+  val timezone = "+".scip ~> digits ~> ":".scip ~> digits
   val dateTime = Scip {
     val sdate = date.run
     val stime = Scip {
-      println(scx.index)
-      println(s"choice: »${choice("T".scip, whitespace).str.run}«")
-      println(scx.index)
+      choice("T".scip, whitespace).str.run
       val t = time.run
       timezone.attempt.run
       t
     }.opt.run
-
-    println(s"$stime, »${scx.input.view.slice(scx.index, scx.index + 42).str}«")
-
     ScitzenDateTime(sdate, stime)
   }
 

@@ -10,6 +10,7 @@ import scala.quoted.*
 import scala.util.NotGiven
 import scala.util.control.ControlThrowable
 import scala.Tuple.*
+import scala.deriving.Mirror
 
 object scip {
 
@@ -26,7 +27,7 @@ object scip {
 
     object ScipExInstance extends ScipEx {
       override def getMessage: String =
-        s"$reason: at ${input.view.slice(lastFail, lastFail + 12).str} reset to »${slice(12).str}«"
+        s"$reason: at ${lastFail}»${input.view.slice(lastFail, lastFail + 12).str}« reset to ${index}»${slice(12).str}«"
     }
 
     def fail(msg: String): Nothing =
@@ -111,32 +112,12 @@ object scip {
 
   inline def scx(using inline scx0: Scx): scx0.type = scx0
 
-  type FlatConcat[A, B] = A match
-    case Unit => B
-    case _    => FlatConcat2[A, B]
-  type FlatConcat2[A, B] = B match
-    case Unit    => A
-    case b *: bs => A *: b *: bs
-    case _       => (A, B)
-
-  inline def flatConcat[A, B](a: A, b: B): FlatConcat[A, B] =
-    inline erasedValue[A] match
-      case _: Unit => b
-      case _       => flatConcat2[A, B](a, b)
-
-  inline def flatConcat2[A, B](a: A, b: B): FlatConcat2[A, B] =
-    inline b match
-      case _: Unit      => a
-      case bs: *:[x, y] => (a *: bs)
-      case _: Any       => (a, b)
-
   extension [A](inline scip: Scip[A]) {
-    inline def run(using inline scx: Scx): A = scip.run0(scx)
-    inline def ~[B](inline other: Scip[B]): Scip[FlatConcat[A, B]] = Scip {
-      val a = scip.run
-      val b = other.run
-      flatConcat(a, b)
-    }
+    inline def run(using inline scx: Scx): A                       = scip.run0(scx)
+    inline def tup: Scip[Tuple1[A]]                                = map(Tuple1.apply)
+    inline def ~:[B <: Tuple](inline other: Scip[B]): Scip[A *: B] = Scip { scip.run *: other.run }
+    inline def <~[B](inline other: Scip[B]): Scip[A]               = Scip { val res = scip.run; other.run; res }
+    inline def ~>[B](inline other: Scip[B]): Scip[B]               = Scip { scip.run; other.run }
     inline def opt: Scip[Option[A]] = Scip {
       scip.map(Some.apply).orElse(Option.empty).run
     }
@@ -146,7 +127,8 @@ object scip {
       val end = scx.index
       scx.input.view.slice(start, end)
     }
-    inline def map[B](inline f: A => B): Scip[B] = Scip { f(scip.run) }
+    inline def map[B](inline f: A => B): Scip[B]           = Scip { f(scip.run) }
+    inline def flatMap[B](inline f: A => Scip[B]): Scip[B] = map(f).flatten
     inline def parseNonEmpty: Scip[A] = Scip {
       val start = scx.index
       val res   = scip.run
@@ -208,6 +190,8 @@ object scip {
     }
 
   }
+
+  extension [A](inline scip: Scip[Scip[A]]) inline def flatten: Scip[A] = Scip(scip.run.run)
 
   extension (inline scip: Scip[Boolean]) {
     inline def falseFail(msg: => String): Scip[Unit] = Scip {
