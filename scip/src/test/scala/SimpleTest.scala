@@ -2,9 +2,10 @@ import de.rmgk.scip.*
 
 class SimpleTest extends munit.FunSuite {
 
+
   test("chain") {
     given scx: Scx = Scx("abc")
-    val res        = ("a".scip ~> "b".scip ~> "c".scip).str.run
+    val res        = ("a".scip ~: "b".scip ~: "c".scip).str.run
     assertEquals(scx.index, scx.input.length)
     assertEquals(res, "abc")
   }
@@ -49,12 +50,17 @@ class SimpleTest extends munit.FunSuite {
     val as  = "a".scip.attempt.rep
     val bs  = "b".scip.attempt.rep
     val cs  = "c".scip.attempt.rep
-    val res = (as ~: bs.tup).run(using Scx("aaaabbbbb"))
+    val res = (as ~: bs).run(using Scx("aaaabbbbb"))
     assertEquals(res, (4, 5))
 
 
-    val res2 = (as ~: bs ~: cs.tup).run(using Scx("aaaabbbbbcc"))
+    val res2 = (as ~: bs ~: cs).run(using Scx("aaaabbbbbcc"))
+
     assertEquals(res2, (4, 5, 2))
+
+    val res3 = (as ~: bs ~: cs).run(using Scx("aaaabbbbbcc"))
+
+    assertEquals(res3, res2)
   }
 
   test("flatten") {
@@ -76,7 +82,6 @@ class SimpleTest extends munit.FunSuite {
         b <- bp
         c <- cp
       yield (a, b, c)
-    // println(printCode(parse))
 
     val res = parse.run(using Scx("abc"))
     assertEquals(res, ("a", "b", "c"))
@@ -117,13 +122,13 @@ object TimeParsers {
   val time = Scip {
     val res = ScitzenTime(
       digits.str.run,
-      (":".scip ~> digits.str).run,
-      (":".scip ~> digits.str).run
+      (":".scip ~: digits.str).run,
+      (":".scip ~: digits.str).run
     )
-    (".".scip ~> digits).attempt.run
+    (".".scip ~: digits).attempt.run
     res
   }
-  val timezone = "+".scip ~> digits ~> ":".scip ~> digits
+  val timezone = "+".scip ~: digits ~: ":".scip ~: digits
   val dateTime = Scip {
     val sdate = date.run
     val stime = Scip {
