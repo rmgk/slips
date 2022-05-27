@@ -38,7 +38,7 @@ object scip {
 
     def ahead(i: Int): Byte = input(index + i)
 
-    def slice(i: Int): IndexedSeqView[Byte] = input.view.slice(index, index + 1)
+    def slice(i: Int): IndexedSeqView[Byte] = input.view.slice(index, index + i)
 
     def available: Int = input.length - index
 
@@ -189,13 +189,13 @@ object scip {
 
     inline def require(inline check: A => Boolean): Scip[A] = Scip {
       val res = scip.run
-      if check(res) then res else scx.fail(s"required: ${scala.compiletime.codeOf(check)}")
+      if check(res) then res else scx.fail(s"require")
     }
 
     inline def trace(inline name: String): Scip[A] = Scip {
       if !scx.tracing then scip.run
       else
-        println(" " * scx.depth + s"+ $name")
+        println(" " * scx.depth + s"+ $name (${scx.index})")
         scx.depth += 1
         try scip.run
         catch
@@ -204,7 +204,7 @@ object scip {
             throw e
         finally
           scx.depth -= 1
-          println(" " * scx.depth + s"- $name")
+          println(" " * scx.depth + s"- $name (${scx.index})")
     }
 
   }
@@ -237,8 +237,8 @@ object scip {
     }
   }
 
-  inline def until(inline end: Scip[Any]): Scip[Unit] = Scip {
-    while !end.attempt.lookahead.run && scx.next do ()
+  inline def until(inline end: Scip[Boolean]): Scip[Unit] = Scip {
+    while !end.lookahead.run && scx.next do ()
   }
 
   inline def whitespace: Scip[Unit] = cpred(Character.isWhitespace).rep.require(_ > 0).drop
