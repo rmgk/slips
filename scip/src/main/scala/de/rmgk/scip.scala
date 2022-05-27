@@ -17,15 +17,18 @@ object scip {
       val input: Array[Byte],
       var index: Int,
       var goodIndex: Int,
+      var depth: Int,
   ) {
 
     object ScipExInstance extends ScipEx {
-      var message = () => "no error"
+      var message                     = () => "no error"
       override def getMessage: String = message()
     }
 
     def fail(msg: => String): Nothing =
-      ScipExInstance.message = () => s"$msg\nat: »${input.view.slice(index, index + 42).str}«"
+      def myMsg() = s"$msg at: »${input.view.slice(index, index + 24).str}«"
+      // println(myMsg())
+      ScipExInstance.message = myMsg
       throw ScipExInstance
 
     def ahead(i: Int): Byte = input(index + i)
@@ -94,7 +97,7 @@ object scip {
   }
 
   object Scx {
-    def apply(s: String): Scx = Scx(s.getBytes(UTF_8), 0, 0)
+    def apply(s: String): Scx = Scx(s.getBytes(UTF_8), 0, 0, 0)
   }
 
   class Scip[+A](val run0: Scx => A)
@@ -163,7 +166,7 @@ object scip {
     import quotes.reflect.*
     s.value match
       case None =>
-        report.warning(s"value is not constant", s)
+        // report.warning(s"value is not constant", s)
         '{ exact($s.getBytes(UTF_8)) }
       case Some(v) => bytesMatchImpl(v.getBytes(UTF_8))
 
@@ -213,8 +216,8 @@ object scip {
               args.foldRight[Expr[T]]('{ scx.fail("no alternative matched") }) { (next: Expr[Scip[T]], acc) =>
                 '{
                   $next.orNull.run(using scx) match
-                    case null   => $acc
-                    case res: T => res
+                    case null => $acc
+                    case res  => res.asInstanceOf[T]
                 }
               }
             }
@@ -241,15 +244,19 @@ object scip {
       case _: Unit => null.asInstanceOf[A]
       case other   => normal
 
-  inline def repeat[A](inline it: Scip[A], inline sep: Scip[Any]): Scip[List[A]] = Scip {
+  inline def repeat[A](inline it: Scip[A], inline sep: Scip[Any], min: Int): Scip[List[A]] = Scip {
     var continue = true
     val acc      = unitOpt[A, ListBuffer[A]](ListBuffer.empty[A])
+    var count    = 0
     while continue do
-      val res = it.parseNonEmpty.accept.run
-      unitOpt[A, ListBuffer[A]](acc.addOne(res))
-      try sep.accept.run
+      try
+        val res = it.run
+        count += 1
+        unitOpt[A, ListBuffer[A]](acc.addOne(res))
+        sep.run
       catch case e: ScipEx => continue = false
     val res = unitOpt[A, List[A]](acc.toList)
+    if (count < min) scx.fail(s"repeat $min")
     if res == null then Nil else res
   }
 
