@@ -113,26 +113,29 @@ object scip {
 
   transparent inline def scx(using inline scx0: Scx): scx0.type = scx0
 
-type FlatConcat[A, B] = A match
-  case Unit => B
-  case _ => B match
-    case Unit => A
-    case b *: bs => A *: b *: bs
-    case _       => (A, B)
+  type FlatConcat[A, B] = A match
+    case Unit => B
+    case _ => B match
+      case Unit => A
+      case b *: bs => A *: b *: bs
+      case _       => (A, B)
 
-transparent inline def flatConcat[A, B](a: A, b: B): FlatConcat[A, B] =
-  summonFrom {
-    case given (A =:= Unit)  => b.asInstanceOf[FlatConcat[A, B]]
-    case given (B =:= Unit)  => a.asInstanceOf[FlatConcat[A, B]]
-    case given (B <:< Tuple) => (a *: b).asInstanceOf[FlatConcat[A, B]]
-    case _                   => (a, b).asInstanceOf[FlatConcat[A, B]]
-  }
+  transparent inline def flatConcat[A, B](a: A, b: B): FlatConcat[A, B] =
+    summonFrom {
+      case given (A =:= Unit)  => b.asInstanceOf[FlatConcat[A, B]]
+      case given (B =:= Unit)  => a.asInstanceOf[FlatConcat[A, B]]
+      case given (B <:< Tuple) => (a *: b).asInstanceOf[FlatConcat[A, B]]
+      case _                   => (a, b).asInstanceOf[FlatConcat[A, B]]
+    }
 
   extension [A](inline scip: Scip[A]) {
     transparent inline def run(using inline scx: Scx): A = scip.run0(scx)
-    transparent inline def ~:[B](inline other: Scip[B]): Scip[FlatConcat[A, B]] = Scip {
-      flatConcat(scip.run, other.run)
-    }
+    transparent inline def ~:[B](inline other: Scip[B]): Scip[FlatConcat[A, B]] = Scip { flatConcat(scip.run, other.run) }
+    transparent inline def ~[B](inline other: Scip[B]): Scip[Unit] = Scip { {scip.run; other.run} }
+    transparent inline def <~[B](inline other: Scip[B]): Scip[A] = Scip { {val a = scip.run; other.run; a} }
+    transparent inline def ~>[B](inline other: Scip[B]): Scip[B] = Scip { {scip.run; other.run} }
+    transparent inline def <~>[B](inline other: Scip[B]): Scip[(A, B)] = Scip { (scip.run, other.run) }
+
     transparent inline def opt: Scip[Option[A]] = Scip {
       scip.map(Some.apply).orElse(Option.empty).run
     }
