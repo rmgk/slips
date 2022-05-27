@@ -18,19 +18,20 @@ object scip {
   case class Scx(
       val input: Array[Byte],
       var index: Int,
-      var goodIndex: Int,
       var depth: Int,
+      var lastFail: Int,
+      var reason: String,
+      val tracing: Boolean,
   ) {
 
     object ScipExInstance extends ScipEx {
-      var message                     = () => "no error"
-      override def getMessage: String = message()
+      override def getMessage: String =
+        s"$reason: at ${input.view.slice(lastFail, lastFail + 12).str} reset to »${slice(12).str}«"
     }
 
-    def fail(msg: => String): Nothing =
-      def myMsg() = s"$msg at: »${input.view.slice(index, index + 24).str}«"
-      // println(myMsg())
-      ScipExInstance.message = myMsg
+    def fail(msg: String): Nothing =
+      reason = msg
+      lastFail = index
       throw ScipExInstance
 
     def ahead(i: Int): Byte = input(index + i)
@@ -41,7 +42,7 @@ object scip {
 
     def assertAvailable(len: Int): Unit =
       val rem = input.length - index - len
-      if rem < 0 then fail(s"end of input reached, but ${-rem} more bytes requested")
+      if rem < 0 then fail("unavailable")
 
     val EOT: Byte = 3.toByte
 
@@ -99,7 +100,7 @@ object scip {
   }
 
   object Scx {
-    def apply(s: String): Scx = Scx(s.getBytes(UTF_8), 0, 0, 0)
+    def apply(s: String): Scx = Scx(s.getBytes(UTF_8), index = 0, depth = 0, lastFail = -1, reason = "", tracing = true)
   }
 
   class Scip[+A](val run0: Scx => A)
@@ -114,20 +115,20 @@ object scip {
     case Unit => B
     case _    => FlatConcat2[A, B]
   type FlatConcat2[A, B] = B match
-    case Unit  => A
+    case Unit    => A
     case b *: bs => A *: b *: bs
-    case _     => (A, B)
+    case _       => (A, B)
 
   inline def flatConcat[A, B](a: A, b: B): FlatConcat[A, B] =
     inline erasedValue[A] match
       case _: Unit => b
-      case _ => flatConcat2[A, B](a, b)
+      case _       => flatConcat2[A, B](a, b)
 
   inline def flatConcat2[A, B](a: A, b: B): FlatConcat2[A, B] =
     inline b match
-      case _: Unit  => a
+      case _: Unit      => a
       case bs: *:[x, y] => (a *: bs)
-      case _: Any   => (a, b)
+      case _: Any       => (a, b)
 
   extension [A](inline scip: Scip[A]) {
     inline def run(using inline scx: Scx): A = scip.run0(scx)
@@ -136,9 +137,6 @@ object scip {
       val b = other.run
       flatConcat(a, b)
     }
-    // inline def <~>[B <: Tuple](inline other: Scip[B]): Scip[A *: B] = Scip { scip.run *: other.run }
-    // inline def ~>[B](inline other: Scip[B]): Scip[B] = Scip {scip.run; other.run}
-    // inline def <~[B](inline other: Scip[B]): Scip[A] = Scip { val res = scip.run; other.run; res }
     inline def opt: Scip[Option[A]] = Scip {
       scip.map(Some.apply).orElse(Option.empty).run
     }
@@ -194,6 +192,21 @@ object scip {
       if check(res) then res else scx.fail(s"required: ${scala.compiletime.codeOf(check)}")
     }
 
+    inline def trace(inline name: String): Scip[A] = Scip {
+      if !scx.tracing then scip.run
+      else
+        println(" " * scx.depth + s"+ $name")
+        scx.depth += 1
+        try scip.run
+        catch
+          case e: ScipEx =>
+            println(" " * (scx.depth - 1) + s"! $name (${e.getMessage})")
+            throw e
+        finally
+          scx.depth -= 1
+          println(" " * scx.depth + s"- $name")
+    }
+
   }
 
   extension (inline scip: Scip[Boolean]) {
@@ -212,8 +225,9 @@ object scip {
     inline def str: Scip[String] = scip.capture.map(_.str)
   }
 
-  inline def whileRange(lo: Int, hi: Int): Scip[Unit] = pred(b => lo <= b && b <= hi).rep.drop
-  inline def pred(inline p: Int => Boolean): Scip[Boolean] = Scip {
+  inline def whileRange(lo: Int, hi: Int): Scip[Unit]        = bpred(b => lo <= b && b <= hi).rep.drop
+  inline def bpred(inline p: Byte => Boolean): Scip[Boolean] = Scip { scx.containsNext(p) }
+  inline def cpred(inline p: Int => Boolean): Scip[Boolean] = Scip {
     scx.available > 0 && {
       val read = scx.intPred(p)
       scx.index += read
@@ -225,7 +239,7 @@ object scip {
     while !end.attempt.lookahead.run && scx.next do ()
   }
 
-  inline def whitespace: Scip[Unit] = pred(Character.isWhitespace).rep.require(_ > 0).drop
+  inline def whitespace: Scip[Unit] = cpred(Character.isWhitespace).rep.require(_ > 0).drop
 
   inline def choice[T](inline alternatives: Scip[T]*): Scip[T] = ${ choiceImpl('alternatives) }
 
@@ -235,7 +249,7 @@ object scip {
       case Varargs(args) => '{
           Scip { scx ?=>
             ${
-              args.foldRight[Expr[T]]('{ scx.fail("no alternative matched") }) { (next: Expr[Scip[T]], acc) =>
+              args.foldRight[Expr[T]]('{ scx.fail("choice") }) { (next: Expr[Scip[T]], acc) =>
                 '{
                   $next.orNull.run(using scx) match
                     case null => $acc
@@ -284,7 +298,7 @@ object scip {
     var i = 0
     while i < len
     do
-      if b(i) != scx.ahead(i) then scx.fail(s"input ahead »${scx.slice(len).str}« did not match »${b.view.str}« ")
+      if b(i) != scx.ahead(i) then scx.fail(s"exact »${b.view.str}«")
       i += 1
     scx.index += len
   }
