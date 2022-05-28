@@ -125,13 +125,17 @@ object scip {
           scx.index = start
           b
     }
-    inline def orNull: Scip[A | Null] = scip.orElse[A | Null](null)
     inline def lookahead: Scip[A] = Scip {
       val start = scx.index
       try scip.run
       finally scx.index = start
     }
     inline def attempt: Scip[Boolean] = scip.map(_ => true).orElse(false)
+    inline def require(inline f: A => Boolean): Scip[A] = Scip {
+      val res = scip.run
+      if !f(res) then scx.fail("")
+      res
+    }
 
     inline def list(inline sep: Scip[Boolean]): Scip[List[A]] = Scip {
       val acc         = ListBuffer.empty[A]
@@ -147,11 +151,6 @@ object scip {
         acc.toList
       catch case e: ScipEx => acc.toList
       finally scx.index = resultIndex
-    }
-
-    inline def require(inline check: A => Boolean): Scip[A] = Scip {
-      val res = scip.run
-      if check(res) then res else scx.fail(s"require")
     }
 
     inline def str: Scip[String] = scip.capture.map(_.str)
@@ -236,11 +235,9 @@ object scip {
       case Varargs(args) => '{
           Scip { scx ?=>
             ${
-              args.foldRight[Expr[T]]('{ scx.fail("choice") }) { (next: Expr[Scip[T]], acc) =>
+              args.init.foldRight[Expr[T]]('{ ${args.last}.run }) { (next: Expr[Scip[T]], acc) =>
                 '{
-                  $next.orNull.run(using scx) match
-                    case null => $acc
-                    case res  => res.asInstanceOf[T]
+                  $next.orElse[T]($acc).run
                 }
               }
             }
