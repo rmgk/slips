@@ -102,6 +102,16 @@ class SimpleTest extends munit.FunSuite {
     assertEquals(res, "eeeeeee")
   }
 
+  test("choice") {
+    val as  = "a".scip.rep.min(1).orFail.str
+    val bs  = "b".scip.rep.min(2).orFail.str
+    val cs  = "c".scip.rep.min(3).orFail.str
+    val choi = choice(as, bs, cs)
+
+    val res = choi.run0(Scx("ccbba"))
+    assertEquals(res, "bb")
+  }
+
 }
 
 case class ScitzenDate(year: String, month: String, day: String) {
