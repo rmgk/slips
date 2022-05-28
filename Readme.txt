@@ -1,7 +1,7 @@
 Changelog
 =========
 
-v0.next
+v0.4.2
 
 	Scip
 	* add simple parsing library that experiments with metaprogramming
