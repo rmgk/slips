@@ -103,13 +103,15 @@ class SimpleTest extends munit.FunSuite {
   }
 
   test("choice") {
-    val as  = "a".scip.rep.min(1).orFail.str
-    val bs  = "b".scip.rep.min(2).orFail.str
-    val cs  = "c".scip.rep.min(3).orFail.str
-    val choi = choice(as, bs, cs)
+    try
+      val as  = "a".scip.rep.min(1).orFail.str
+      val bs  = "b".scip.rep.min(2).orFail.str
+      val cs  = "c".scip.rep.min(3).orFail.str
+      val choi = choice(as, bs, cs)
 
-    val res = choi.run0(Scx("ccbba"))
-    assertEquals(res, "bb")
+      val res = choi.run0(Scx("bbaccc"))
+      assertEquals(res, "bb")
+    catch case e: ScipEx => throw IllegalStateException(e.getMessage)
   }
 
 }
