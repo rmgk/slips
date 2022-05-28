@@ -38,9 +38,11 @@ object scip {
 
     def ahead(i: Int): Byte = input(index + i)
 
-    def debugat(i: Int): String = s"${index}»${input.view.slice(i, i + 12).str.replaceAll("\\n", "\\\\n")}«"
+    def debugat(i: Int): String = s"${index}»${str(i, i + 12).replaceAll("\\n", "\\\\n")}«"
 
     def available: Int = maxpos - index
+
+    def str(l: Int, r: Int) = new String(input, l, math.min(r, maxpos) - l, UTF_8)
 
     inline def peek: Byte = input(index)
 
@@ -114,11 +116,11 @@ object scip {
     inline def opt: Scip[Option[A]] = Scip {
       scip.map(Some.apply).orElse(Option.empty).run
     }
-    inline def capture: Scip[IndexedSeqView[Byte]] = Scip {
+    inline def capture: Scip[(Int, Int)] = Scip {
       val start = scx.index
       scip.run
       val end = scx.index
-      scx.input.view.slice(start, end)
+      (start, end)
     }
     inline def map[B](inline f: A => B): Scip[B]           = Scip { f(scip.run) }
     inline def flatMap[B](inline f: A => Scip[B]): Scip[B] = map(f).flatten
@@ -163,7 +165,11 @@ object scip {
       finally scx.index = resultIndex
     }
 
-    inline def str: Scip[String] = scip.capture.map(_.str)
+    inline def dropstr: Scip[String] = Scip {
+      val start = scx.index
+      scip.run
+      scx.str(start, scx.index)
+    }
 
     inline def trace(inline name: String): Scip[A] = Scip {
       if !scx.tracing then scip.run
@@ -192,6 +198,7 @@ object scip {
         scx.index = start
         scx.fail
     }
+    inline def str: Scip[String] = scip.orFail.dropstr
     inline def rep: Scip[Int] = Scip {
       var matches = 0
       while scip.run do matches += 1
@@ -256,9 +263,7 @@ object scip {
         }
   }
 
-  extension (isv: IndexedSeqView[Byte]) {
-    def str: String = new String(isv.toArray, UTF_8)
-  }
+
 
   extension (s: String) {
     inline def all: Scip[Boolean] = ${ stringMatchImpl('s) }
