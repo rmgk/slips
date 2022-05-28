@@ -20,7 +20,6 @@ lazy val chain = crossProject(JSPlatform, JVMPlatform)
   .crossType(CrossType.Pure)
   .in(file("chain")).settings(
     name               := "chain",
-    crossScalaVersions := Seq(Versions.scala3),
     commonSettings,
   )
 
@@ -28,7 +27,6 @@ lazy val category = crossProject(JSPlatform, JVMPlatform)
   .crossType(CrossType.Pure)
   .in(file("category")).settings(
     name               := "category",
-    crossScalaVersions := Seq(Versions.scala3),
     commonSettings,
   )
 
@@ -36,6 +34,5 @@ lazy val scip = crossProject(JSPlatform, JVMPlatform)
   .crossType(CrossType.Pure)
   .in(file("scip")).settings(
     name               := "scip",
-    crossScalaVersions := Seq(Versions.scala3),
     commonSettings,
   )
