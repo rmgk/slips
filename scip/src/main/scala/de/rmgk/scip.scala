@@ -20,6 +20,7 @@ object scip {
   case class Scx(
       val input: Array[Byte],
       var index: Int,
+      val maxpos: Int,
       var depth: Int,
       var lastFail: Int,
       var reason: String,
@@ -38,19 +39,19 @@ object scip {
 
     def ahead(i: Int): Byte = input(index + i)
 
-    def debugat(i: Int): String             = s"${index}»${input.view.slice(i, i + 12).str.replaceAll("\\n", "\\\\n")}«"
+    def debugat(i: Int): String = s"${index}»${input.view.slice(i, i + 12).str.replaceAll("\\n", "\\\\n")}«"
 
-    def available: Int = input.length - index
+    def available: Int = maxpos - index
 
     inline def peek: Byte = input(index)
 
     def next: Boolean =
-      if index < input.length
+      if index < maxpos
       then { index += 1; true }
       else false
 
     inline def containsNext(inline p: Byte => Boolean): Boolean =
-      index < input.length && p(peek) && { index += 1; true }
+      index < maxpos && p(peek) && { index += 1; true }
 
     inline def intPred(inline p: Int => Boolean): Int = {
       val b = peek & 0xff
@@ -87,7 +88,9 @@ object scip {
   }
 
   object Scx {
-    def apply(s: String): Scx = Scx(s.getBytes(UTF_8), index = 0, depth = 0, lastFail = -1, reason = "", tracing = true)
+    def apply(s: String): Scx =
+      val b = s.getBytes(UTF_8)
+      Scx(b, index = 0, maxpos = b.length, depth = 0, lastFail = -1, reason = "", tracing = true)
   }
 
   class Scip[+A](val run0: Scx => A)
@@ -96,15 +99,18 @@ object scip {
     inline def apply[A](inline run: Scx ?=> A) = new Scip(run(using _))
   }
 
+  inline def scatch[A](inline body: A)(inline alt: A): A =
+    try body
+    catch case e: ScipEx => alt
+
   inline def scx(using inline scx0: Scx): scx0.type = scx0
 
-
   extension [A](inline scip: Scip[A]) {
-    inline def run(using inline scx: Scx): A                        = scip.run0(scx)
-    //inline def ~[B](inline other: Scip[B]): Scip[Unit]              = Scip { { scip.run; other.run } }
-    inline def <~[B](inline other: Scip[B]): Scip[A]                = Scip { { val a = scip.run; other.run; a } }
-    inline def ~>[B](inline other: Scip[B]): Scip[B]                = Scip { { scip.run; other.run } }
-    inline def <~>[B](inline other: Scip[B]): Scip[(A, B)]          = Scip { (scip.run, other.run) }
+    inline def run(using inline scx: Scx): A = scip.run0(scx)
+    // inline def ~[B](inline other: Scip[B]): Scip[Unit]              = Scip { { scip.run; other.run } }
+    inline def <~[B](inline other: Scip[B]): Scip[A]       = Scip { { val a = scip.run; other.run; a } }
+    inline def ~>[B](inline other: Scip[B]): Scip[B]       = Scip { { scip.run; other.run } }
+    inline def <~>[B](inline other: Scip[B]): Scip[(A, B)] = Scip { (scip.run, other.run) }
 
     inline def opt: Scip[Option[A]] = Scip {
       scip.map(Some.apply).orElse(Option.empty).run
@@ -125,12 +131,16 @@ object scip {
           scx.index = start
           b
     }
+    /** always backtracks independent of result */
     inline def lookahead: Scip[A] = Scip {
       val start = scx.index
       try scip.run
       finally scx.index = start
     }
-    inline def attempt: Scip[Boolean] = scip.map(_ => true).orElse(false)
+    /** converts exceptions into false */
+    inline def attempt: Scip[Boolean] = Scip {
+      scatch { scip.run; true } { false }
+    }
     inline def require(inline f: A => Boolean): Scip[A] = Scip {
       val res = scip.run
       if !f(res) then scx.fail("")
@@ -138,19 +148,16 @@ object scip {
     }
 
     inline def list(inline sep: Scip[Boolean]): Scip[List[A]] = Scip {
-      val acc         = ListBuffer.empty[A]
-      var resultIndex = scx.index
-      try
+      val acc = ListBuffer.empty[A]
+      scatch {
         while
           val start = scx.index
           val res   = scip.run
-          resultIndex = scx.index
           acc.addOne(res)
-          sep.run && start < scx.index
+          sep.orBacktrack.run && start < scx.index
         do ()
         acc.toList
-      catch case e: ScipEx => acc.toList
-      finally scx.index = resultIndex
+      }(acc.toList)
     }
 
     inline def str: Scip[String] = scip.capture.map(_.str)
@@ -183,6 +190,7 @@ object scip {
         scx.index = start
         scx.fail(msg)
     }
+    inline def orBacktrack: Scip[Boolean] = Scip { val start = scx.index; scip.run || { scx.index = start; false } }
     inline def rep: Scip[Int] = Scip {
       var matches = 0
       while scip.run do matches += 1
@@ -210,7 +218,7 @@ object scip {
     }
   }
 
-  inline def scipend: Scip[Boolean] = Scip { scx.index >= scx.input.length }
+  inline def scipend: Scip[Boolean] = Scip { scx.index >= scx.maxpos }
 
   inline def bpred(inline p: Byte => Boolean): Scip[Boolean] = Scip { scx.containsNext(p) }
   inline def cpred(inline p: Int => Boolean): Scip[Boolean] = Scip {
@@ -235,7 +243,7 @@ object scip {
       case Varargs(args) => '{
           Scip { scx ?=>
             ${
-              args.init.foldRight[Expr[T]]('{ ${args.last}.run }) { (next: Expr[Scip[T]], acc) =>
+              args.init.foldRight[Expr[T]]('{ ${ args.last }.run }) { (next: Expr[Scip[T]], acc) =>
                 '{
                   $next.orElse[T]($acc).run
                 }
