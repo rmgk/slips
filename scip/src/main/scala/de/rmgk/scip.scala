@@ -178,8 +178,11 @@ object scip {
   extension (inline scip: Scip[Boolean]) {
     inline def orFail: Scip[Unit] = orFailWith("")
     inline def orFailWith(msg: String): Scip[Unit] = Scip {
+      val start = scx.index
       if scip.run then ()
-      else scx.fail(msg)
+      else
+        scx.index = start
+        scx.fail(msg)
     }
     inline def rep: Scip[Int] = Scip {
       var matches = 0
@@ -199,8 +202,12 @@ object scip {
 
   extension (inline scip: Scip[Int]) {
     inline def min(i: Int): Scip[Boolean] = Scip {
-      val start = scx.index
-      scip.run >= i || { scx.index = start; false }
+      inline if i == 0 then
+        scip.run
+        true
+      else
+        val start = scx.index
+        scip.run >= i || { scx.index = start; false }
     }
   }
 
@@ -315,7 +322,7 @@ object scip {
           true
         else if b(i) == scx.ahead(i) then rec(i + 1)
         else false
-      rec(len)
+      rec(0)
   }
 
 }
