@@ -38,18 +38,9 @@ object scip {
 
     def ahead(i: Int): Byte = input(index + i)
 
-    def slice(i: Int): IndexedSeqView[Byte] = input.view.slice(index, index + i)
-    def debugat(i: Int): String = s"${index}»${input.view.slice(i, i + 12).str.replaceAll("\\n", "\\\\n")}«"
+    def debugat(i: Int): String             = s"${index}»${input.view.slice(i, i + 12).str.replaceAll("\\n", "\\\\n")}«"
 
     def available: Int = input.length - index
-
-    def assertAvailable(len: Int): Unit =
-      val rem = input.length - index - len
-      if rem < 0 then fail("unavailable")
-
-    val EOT: Byte = 3.toByte
-
-    def readSafe: Byte = if index < input.length then input(index) else EOT
 
     inline def peek: Byte = input(index)
 
@@ -60,14 +51,6 @@ object scip {
 
     inline def containsNext(inline p: Byte => Boolean): Boolean =
       index < input.length && p(peek) && { index += 1; true }
-
-    def assertNext(b: Byte): Unit =
-      assertAt(0, b)
-      index += 1
-
-    def assertAt(i: Int, b: Byte): Unit =
-      val next = index + i
-      (next < input.length && input(next) == b) || fail(s"expected $b")
 
     inline def intPred(inline p: Int => Boolean): Int = {
       val b = peek & 0xff
@@ -115,25 +98,10 @@ object scip {
 
   inline def scx(using inline scx0: Scx): scx0.type = scx0
 
-  type FlatConcat[A, B] = A match
-    case Unit => B
-    case _ => B match
-        case Unit    => A
-        case b *: bs => A *: b *: bs
-        case _       => (A, B)
-
-  inline def flatConcat[A, B](a: A, b: B): FlatConcat[A, B] =
-    summonFrom {
-      case given (A =:= Unit)  => b.asInstanceOf[FlatConcat[A, B]]
-      case given (B =:= Unit)  => a.asInstanceOf[FlatConcat[A, B]]
-      case given (B <:< Tuple) => (a *: b).asInstanceOf[FlatConcat[A, B]]
-      case _                   => (a, b).asInstanceOf[FlatConcat[A, B]]
-    }
 
   extension [A](inline scip: Scip[A]) {
     inline def run(using inline scx: Scx): A                        = scip.run0(scx)
-    inline def ~:[B](inline other: Scip[B]): Scip[FlatConcat[A, B]] = Scip { flatConcat(scip.run, other.run) }
-    inline def ~[B](inline other: Scip[B]): Scip[Unit]              = Scip { { scip.run; other.run } }
+    //inline def ~[B](inline other: Scip[B]): Scip[Unit]              = Scip { { scip.run; other.run } }
     inline def <~[B](inline other: Scip[B]): Scip[A]                = Scip { { val a = scip.run; other.run; a } }
     inline def ~>[B](inline other: Scip[B]): Scip[B]                = Scip { { scip.run; other.run } }
     inline def <~>[B](inline other: Scip[B]): Scip[(A, B)]          = Scip { (scip.run, other.run) }
@@ -149,12 +117,6 @@ object scip {
     }
     inline def map[B](inline f: A => B): Scip[B]           = Scip { f(scip.run) }
     inline def flatMap[B](inline f: A => Scip[B]): Scip[B] = map(f).flatten
-    inline def parseNonEmpty: Scip[A] = Scip {
-      val start = scx.index
-      val res   = scip.run
-      if start == scx.index then scx.fail("parsed nothing")
-      res
-    }
     inline def orElse[B >: A](inline b: B): Scip[B] = Scip {
       val start = scx.index
       try scip.run
@@ -171,24 +133,19 @@ object scip {
     }
     inline def attempt: Scip[Boolean] = scip.map(_ => true).orElse(false)
 
-    inline def drop: Scip[Unit] = scip.map(_ => ())
-
-    inline def list(inline sep: Scip[Unit]): Scip[List[A]] = Scip {
-      val acc = ListBuffer.empty[A]
+    inline def list(inline sep: Scip[Boolean]): Scip[List[A]] = Scip {
+      val acc         = ListBuffer.empty[A]
       var resultIndex = scx.index
       try
-        var continue = true
-        while continue do
+        while
           val start = scx.index
           val res   = scip.run
           resultIndex = scx.index
           acc.addOne(res)
-          sep.run
-          continue = start < scx.index
+          sep.run && start < scx.index
+        do ()
         acc.toList
-      catch
-        case e: ScipEx =>
-          acc.toList
+      catch case e: ScipEx => acc.toList
       finally scx.index = resultIndex
     }
 
@@ -196,6 +153,8 @@ object scip {
       val res = scip.run
       if check(res) then res else scx.fail(s"require")
     }
+
+    inline def str: Scip[String] = scip.capture.map(_.str)
 
     inline def trace(inline name: String): Scip[A] = Scip {
       if !scx.tracing then scip.run
@@ -217,22 +176,36 @@ object scip {
   extension [A](inline scip: Scip[Scip[A]]) inline def flatten: Scip[A] = Scip(scip.run.run)
 
   extension (inline scip: Scip[Boolean]) {
-    inline def falseFail(msg: => String): Scip[Unit] = Scip {
-      scip.run match
-        case true  => ()
-        case false => scx.fail(msg)
+    inline def orFail: Scip[Unit] = orFailWith("")
+    inline def orFailWith(msg: String): Scip[Unit] = Scip {
+      if scip.run then ()
+      else scx.fail(msg)
     }
     inline def rep: Scip[Int] = Scip {
       var matches = 0
       while scip.run do matches += 1
       matches
     }
-  }
-  extension (inline scip: Scip[Unit]) {
-    inline def str: Scip[String] = scip.capture.map(_.str)
+
+    inline def or(inline other: Scip[Boolean]): Scip[Boolean]  = Scip { scip.run || other.run }
+    inline def and(inline other: Scip[Boolean]): Scip[Boolean] = Scip { scip.run && other.run }
+
+    inline def ifso[B](inline other: Scip[B]): Scip[B] = Scip {
+      if scip.run then other.run
+      else scx.fail("ifso")
+    }
+
   }
 
-  inline def whileRange(lo: Int, hi: Int): Scip[Unit]        = bpred(b => lo <= b && b <= hi).rep.drop
+  extension (inline scip: Scip[Int]) {
+    inline def min(i: Int): Scip[Boolean] = Scip {
+      val start = scx.index
+      scip.run >= i || { scx.index = start; false }
+    }
+  }
+
+  inline def scipend: Scip[Boolean] = Scip { scx.index >= scx.input.length }
+
   inline def bpred(inline p: Byte => Boolean): Scip[Boolean] = Scip { scx.containsNext(p) }
   inline def cpred(inline p: Int => Boolean): Scip[Boolean] = Scip {
     scx.available > 0 && {
@@ -245,10 +218,8 @@ object scip {
   inline def until(inline end: Scip[Boolean]): Scip[Int] = Scip {
     val start = scx.index
     while !end.lookahead.run && scx.next do ()
-    start - scx.index
+    scx.index - start
   }
-
-  inline def whitespace: Scip[Unit] = cpred(Character.isWhitespace).rep.require(_ > 0).drop
 
   inline def choice[T](inline alternatives: Scip[T]*): Scip[T] = ${ choiceImpl('alternatives) }
 
@@ -275,10 +246,10 @@ object scip {
   }
 
   extension (s: String) {
-    inline def scip: Scip[Unit]   = ${ stringMatchImpl('s) }
-    inline def any: Scip[Boolean] = ${ stringAltImpl('s) }
+    inline def scip: Scip[Boolean] = ${ stringMatchImpl('s) }
+    inline def any: Scip[Boolean]  = ${ stringAltImpl('s) }
   }
-  def stringMatchImpl(s: Expr[String])(using quotes: Quotes): Expr[Scip[Unit]] =
+  def stringMatchImpl(s: Expr[String])(using quotes: Quotes): Expr[Scip[Boolean]] =
     import quotes.reflect.*
     s.value match
       case None =>
@@ -286,20 +257,24 @@ object scip {
         '{ exact($s.getBytes(UTF_8)) }
       case Some(v) => bytesMatchImpl(v.getBytes(UTF_8))
 
-  def bytesMatchImpl(bytes: Array[Byte])(using quotes: Quotes): Expr[Scip[Unit]] = {
+  def bytesMatchImpl(bytes: Array[Byte])(using quotes: Quotes): Expr[Scip[Boolean]] = {
     import quotes.reflect.*
-    if (bytes.length > 4) then '{ exact(${ Expr(bytes) }) }
-    else
-      '{
-        Scip { (scx: Scx) ?=>
+    '{
+      Scip { (scx: Scx) ?=>
+        if scx.available >= ${ Expr(bytes.length) } &&
           ${
-            val stmts: List[Statement] = bytes.iterator.map(b => '{ scx.assertNext(${ Expr(b) }) }.asTerm).toList
-            val (start, last)          = stmts.splitAt(stmts.length - 1)
-            (if start.isEmpty then last.head
-             else Block(start, last.head.asInstanceOf[Term])).asExprOf[Unit]
+            val stmts: List[Expr[Boolean]] = bytes.iterator.zipWithIndex.map { (b, i) =>
+              '{ scx.ahead(${ Expr(i) }) == ${ Expr(b) } }
+            }.toList
+            stmts.reduceLeft((l, r) => '{ ${ l } && ${ r } })
           }
-        }
+        then {
+          scx.index += ${ Expr(bytes.length) }
+          true
+
+        } else false
       }
+    }
   }
 
   def stringAltImpl(s: Expr[String])(using quotes: Quotes): Expr[Scip[Boolean]] =
@@ -328,17 +303,19 @@ object scip {
     }
   }
 
-  inline def exact(b: String): Scip[Unit] = exact(b.getBytes(StandardCharsets.UTF_8))
+  inline def exact(b: String): Scip[Boolean] = exact(b.getBytes(StandardCharsets.UTF_8))
 
-  inline def exact(b: Array[Byte]): Scip[Unit] = Scip {
+  inline def exact(b: Array[Byte]): Scip[Boolean] = Scip {
     val len = b.length
-    scx.assertAvailable(len)
-    var i = 0
-    while i < len
-    do
-      if b(i) != scx.ahead(i) then scx.fail(s"exact »${b.view.str}«")
-      i += 1
-    scx.index += len
+    if !(scx.available >= len) then false
+    else
+      @tailrec def rec(i: Int): Boolean =
+        if i >= len then
+          scx.index += len
+          true
+        else if b(i) == scx.ahead(i) then rec(i + 1)
+        else false
+      rec(len)
   }
 
 }

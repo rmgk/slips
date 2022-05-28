@@ -4,9 +4,9 @@ class SimpleTest extends munit.FunSuite {
 
   test("chain") {
     given scx: Scx = Scx("abc")
-    val res        = ("a".scip ~: "b".scip ~: "c".scip).str.run
-    assertEquals(scx.index, scx.input.length)
+    val res        = ("a".scip and "b".scip and "c".scip).str.run
     assertEquals(res, "abc")
+    assertEquals(scx.index, scx.input.length)
   }
 
   test("long match") {
@@ -46,24 +46,26 @@ class SimpleTest extends munit.FunSuite {
   }
 
   test("sequence") {
-    val as  = "a".scip.attempt.rep
-    val bs  = "b".scip.attempt.rep
-    val cs  = "c".scip.attempt.rep
-    val res = (as ~: bs).run(using Scx("aaaabbbbb"))
+    val as  = "a".scip.rep
+    val bs  = "b".scip.rep
+    val cs  = "c".scip.rep
+    val res = (as <~> bs).run(using Scx("aaaabbbbb"))
     assertEquals(res, (4, 5))
 
-    val res2 = (as ~: bs ~: cs).run(using Scx("aaaabbbbbcc"))
+    val p3 = Scip((as.run, bs.run, cs.run))
+
+    val res2 = p3.run(using Scx("aaaabbbbbcc"))
 
     assertEquals(res2, (4, 5, 2))
 
-    val res3 = (as ~: bs ~: cs).run(using Scx("aaaabbbbbcc"))
+    val res3 = p3.run(using Scx("aaaabbbbbcc"))
 
     assertEquals(res3, res2)
   }
 
   test("flatten") {
-    def as    = "a".scip.attempt.rep
-    def parse = as.flatMap { count => "b".scip.attempt.rep.require(_ == count) }
+    def as    = "a".scip.rep
+    def parse = as.flatMap { count => "b".scip.rep.require(_ == count) }
     val res   = parse.run(using Scx("aaaabbbb"))
     assertEquals(res, 4)
   }
@@ -89,14 +91,12 @@ class SimpleTest extends munit.FunSuite {
 
     inline def p = "abc".any.rep
 
-    println(printCode(p))
-
     val res = p.run0(Scx("abcaaabc"))
     assertEquals(res, 8)
   }
 
   test("until") {
-    val ut = until("abc".any).map(_ > 0).rep.drop.str
+    val ut = until("abc".any).min(1).rep.min(1).str
 
     val res = ut.run0(Scx("eeeeeee"))
     assertEquals(res, "eeeeeee")
@@ -125,7 +125,7 @@ object ScitzenDateTime {
 }
 
 object TimeParsers {
-  val digits: Scip[Unit] = whileRange('0', '9')
+  val digits: Scip[Unit] = bpred(b => '0' <= b && b <= '9').rep.min(1).orFail
   val date: Scip[ScitzenDate] = Scip {
     val y = digits.str.run
     "-".scip.run
@@ -137,17 +137,17 @@ object TimeParsers {
   val time = Scip {
     val res = ScitzenTime(
       digits.str.run,
-      (":".scip ~: digits.str).run,
-      (":".scip ~: digits.str).run
+      (":".scip ifso digits.str).run,
+      (":".scip ifso digits.str).run
     )
-    (".".scip ~: digits).attempt.run
+    (".".scip.orFail ~> digits).attempt.run
     res
   }
-  val timezone = "+".scip ~: digits ~: ":".scip ~: digits
+  val timezone = "+".scip.ifso(digits <~> (":".scip ifso digits))
   val dateTime = Scip {
     val sdate = date.run
     val stime = Scip {
-      choice("T".scip, whitespace).str.run
+      choice("T".scip.orFail, cpred(Character.isWhitespace).orFail).str.run
       val t = time.run
       timezone.attempt.run
       t

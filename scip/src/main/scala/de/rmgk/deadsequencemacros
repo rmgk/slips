@@ -40,3 +40,21 @@
         }
       case other => report.errorAndAbort(s"not varargs ${scips.show}", scips)
   }
+
+
+  type FlatConcat[A, B] = A match
+    case Unit => B
+    case _ => B match
+        case Unit    => A
+        case b *: bs => A *: b *: bs
+        case _       => (A, B)
+
+  inline def flatConcat[A, B](a: A, b: B): FlatConcat[A, B] =
+    summonFrom {
+      case given (A =:= Unit)  => b.asInstanceOf[FlatConcat[A, B]]
+      case given (B =:= Unit)  => a.asInstanceOf[FlatConcat[A, B]]
+      case given (B <:< Tuple) => (a *: b).asInstanceOf[FlatConcat[A, B]]
+      case _                   => (a, b).asInstanceOf[FlatConcat[A, B]]
+    }
+
+    inline def ~:[B](inline other: Scip[B]): Scip[FlatConcat[A, B]] = Scip { flatConcat(scip.run, other.run) }
