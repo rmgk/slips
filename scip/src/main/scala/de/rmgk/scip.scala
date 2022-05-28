@@ -28,7 +28,7 @@ object scip {
 
     object ScipExInstance extends ScipEx {
       override def getMessage: String =
-        s"$reason: at ${lastFail}»${input.view.slice(lastFail, lastFail + 12).str}« reset to ${index}»${slice(12).str}«"
+        s"$reason: ${debugat(index)}"
     }
 
     def fail(msg: String): Nothing =
@@ -39,6 +39,7 @@ object scip {
     def ahead(i: Int): Byte = input(index + i)
 
     def slice(i: Int): IndexedSeqView[Byte] = input.view.slice(index, index + i)
+    def debugat(i: Int): String = s"${index}»${input.view.slice(i, i + 12).str.replaceAll("\\n", "\\\\n")}«"
 
     def available: Int = input.length - index
 
@@ -53,8 +54,9 @@ object scip {
     inline def peek: Byte = input(index)
 
     def next: Boolean =
-      index += 1
-      index < input.length
+      if index < input.length
+      then { index += 1; true }
+      else false
 
     inline def containsNext(inline p: Byte => Boolean): Boolean =
       index < input.length && p(peek) && { index += 1; true }
@@ -173,11 +175,13 @@ object scip {
 
     inline def list(inline sep: Scip[Unit]): Scip[List[A]] = Scip {
       val acc = ListBuffer.empty[A]
+      var resultIndex = scx.index
       try
         var continue = true
         while continue do
           val start = scx.index
           val res   = scip.run
+          resultIndex = scx.index
           acc.addOne(res)
           sep.run
           continue = start < scx.index
@@ -185,6 +189,7 @@ object scip {
       catch
         case e: ScipEx =>
           acc.toList
+      finally scx.index = resultIndex
     }
 
     inline def require(inline check: A => Boolean): Scip[A] = Scip {
@@ -195,16 +200,16 @@ object scip {
     inline def trace(inline name: String): Scip[A] = Scip {
       if !scx.tracing then scip.run
       else
-        println(" " * scx.depth + s"+ $name (${scx.index})")
+        println(" " * scx.depth * 2 + s"+ $name ${scx.debugat(scx.index)}")
         scx.depth += 1
         try scip.run
         catch
           case e: ScipEx =>
-            println(" " * (scx.depth - 1) + s"! $name (${e.getMessage})")
+            println(" " * (scx.depth - 1) * 2 + s"! $name (${e.getMessage})")
             throw e
         finally
           scx.depth -= 1
-          println(" " * scx.depth + s"- $name (${scx.index})")
+          println(" " * scx.depth * 2 + s"- $name ${scx.debugat(scx.index)}")
     }
 
   }
@@ -237,8 +242,10 @@ object scip {
     }
   }
 
-  inline def until(inline end: Scip[Boolean]): Scip[Unit] = Scip {
+  inline def until(inline end: Scip[Boolean]): Scip[Int] = Scip {
+    val start = scx.index
     while !end.lookahead.run && scx.next do ()
+    start - scx.index
   }
 
   inline def whitespace: Scip[Unit] = cpred(Character.isWhitespace).rep.require(_ > 0).drop

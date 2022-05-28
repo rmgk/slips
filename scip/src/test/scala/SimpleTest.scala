@@ -95,6 +95,13 @@ class SimpleTest extends munit.FunSuite {
     assertEquals(res, 8)
   }
 
+  test("until") {
+    val ut = until("abc".any).map(_ > 0).rep.drop.str
+
+    val res = ut.run0(Scx("eeeeeee"))
+    assertEquals(res, "eeeeeee")
+  }
+
 }
 
 case class ScitzenDate(year: String, month: String, day: String) {
