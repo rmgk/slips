@@ -32,8 +32,7 @@ object scip {
         s"$reason: ${debugat(index)}"
     }
 
-    def fail(msg: String): Nothing =
-      reason = msg
+    def fail: Nothing =
       lastFail = index
       throw ScipExInstance
 
@@ -131,33 +130,37 @@ object scip {
           scx.index = start
           b
     }
+
     /** always backtracks independent of result */
     inline def lookahead: Scip[A] = Scip {
       val start = scx.index
       try scip.run
       finally scx.index = start
     }
+
     /** converts exceptions into false */
     inline def attempt: Scip[Boolean] = Scip {
       scatch { scip.run; true } { false }
     }
     inline def require(inline f: A => Boolean): Scip[A] = Scip {
       val res = scip.run
-      if !f(res) then scx.fail("")
-      res
+      if f(res) then res else scx.fail
     }
 
     inline def list(inline sep: Scip[Boolean]): Scip[List[A]] = Scip {
-      val acc = ListBuffer.empty[A]
-      scatch {
+      val acc         = ListBuffer.empty[A]
+      var resultIndex = scx.index
+      try
         while
           val start = scx.index
           val res   = scip.run
+          resultIndex = scx.index
           acc.addOne(res)
-          sep.orBacktrack.run && start < scx.index
+          sep.run && start < scx.index
         do ()
         acc.toList
-      }(acc.toList)
+      catch case e: ScipEx => acc.toList
+      finally scx.index = resultIndex
     }
 
     inline def str: Scip[String] = scip.capture.map(_.str)
@@ -182,27 +185,27 @@ object scip {
   extension [A](inline scip: Scip[Scip[A]]) inline def flatten: Scip[A] = Scip(scip.run.run)
 
   extension (inline scip: Scip[Boolean]) {
-    inline def orFail: Scip[Unit] = orFailWith("")
-    inline def orFailWith(msg: String): Scip[Unit] = Scip {
+    inline def orFail: Scip[Unit] = Scip {
       val start = scx.index
       if scip.run then ()
       else
         scx.index = start
-        scx.fail(msg)
+        scx.fail
     }
-    inline def orBacktrack: Scip[Boolean] = Scip { val start = scx.index; scip.run || { scx.index = start; false } }
     inline def rep: Scip[Int] = Scip {
       var matches = 0
       while scip.run do matches += 1
       matches
     }
-
-    inline def or(inline other: Scip[Boolean]): Scip[Boolean]  = Scip { scip.run || other.run }
+    inline def or(inline other: Scip[Boolean]): Scip[Boolean] = Scip {
+      val start = scx.index
+      scip.run || { scx.index = start; other.run }
+    }
     inline def and(inline other: Scip[Boolean]): Scip[Boolean] = Scip { scip.run && other.run }
 
     inline def ifso[B](inline other: Scip[B]): Scip[B] = Scip {
       if scip.run then other.run
-      else scx.fail("ifso")
+      else scx.fail
     }
 
   }
@@ -258,8 +261,8 @@ object scip {
   }
 
   extension (s: String) {
-    inline def scip: Scip[Boolean] = ${ stringMatchImpl('s) }
-    inline def any: Scip[Boolean]  = ${ stringAltImpl('s) }
+    inline def all: Scip[Boolean] = ${ stringMatchImpl('s) }
+    inline def any: Scip[Boolean] = ${ stringAltImpl('s) }
   }
   def stringMatchImpl(s: Expr[String])(using quotes: Quotes): Expr[Scip[Boolean]] =
     import quotes.reflect.*
