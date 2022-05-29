@@ -12,6 +12,7 @@ import scala.util.control.ControlThrowable
 import scala.Tuple.*
 import scala.deriving.Mirror
 import scala.compiletime.summonFrom
+import scala.compiletime.constValueOpt
 
 object scip {
 
@@ -32,30 +33,18 @@ object scip {
         s"$reason: ${debugat(index)}"
     }
 
-    def fail: Nothing =
-      lastFail = index
-      throw ScipExInstance
-
-    def ahead(i: Int): Byte = input(index + i)
-
     def debugat(i: Int): String = s"${index}»${str(i, i + 12).replaceAll("\\n", "\\\\n")}«"
-
-    def available: Int = maxpos - index
 
     def str(l: Int, r: Int) = new String(input, l, math.min(r, maxpos) - l, UTF_8)
 
-    inline def peek: Byte = input(index)
+    def contains(bytes: Array[Byte]): Boolean =
+      java.util.Arrays.equals(bytes, 0, bytes.length, input, index, math.min(index + bytes.length, maxpos))
 
-    def next: Boolean =
-      if index < maxpos
-      then { index += 1; true }
-      else false
-
-    inline def containsNext(inline p: Byte => Boolean): Boolean =
-      index < maxpos && p(peek) && { index += 1; true }
+    def available(min: Int): Boolean    = maxpos >= index + min
+    def ahead(i: Int, b: Byte): Boolean = input(index + i) == b
 
     inline def intPred(inline p: Int => Boolean): Int = {
-      val b = peek & 0xff
+      val b = this.peek & 0xff
       if (b & Utf8bits.maxBit) == 0 then if p(b) then 1 else 0
       else
         val count = highest4(b)
@@ -79,7 +68,7 @@ object scip {
       inline def addLowest(b: Int, acc: Int, n: Int): Int  = lowest(b, n) | (acc << n)
       inline def grab(acc: Int, inline pos: Int, inline max: Int): Int =
         inline if (pos >= max) then acc
-        else grab(addLowest(ahead(pos) & 0xff, acc, 6), pos + 1, max)
+        else grab(addLowest(input(index + pos) & 0xff, acc, 6), pos + 1, max)
       inline def highest(b: Int, inline depth: Int): Int =
         inline if depth <= 0 then 0
         else
@@ -88,23 +77,51 @@ object scip {
     }
   }
 
+  extension (inline scx: Scx) {
+
+    inline def fail: Nothing =
+      scx.lastFail = scx.index
+      throw scx.ScipExInstance
+
+    inline def peek: Byte = scx.input(scx.index)
+
+    inline def next: Boolean =
+      if scx.index < scx.maxpos
+      then { scx.index += 1; true }
+      else false
+
+    inline def containsNext(inline p: Byte => Boolean): Boolean =
+      scx.index < scx.maxpos && p(scx.peek) && { scx.index += 1; true }
+
+  }
+
   object Scx {
     def apply(s: String): Scx =
       val b = s.getBytes(UTF_8)
       Scx(b, index = 0, maxpos = b.length, depth = 0, lastFail = -1, reason = "", tracing = true)
   }
 
+  /** Ground rules:
+    * - Scip[Boolean] states if something was parsed.
+    *   - false results should not have consumed any input
+    *   - true results may or may not have consumed input
+    *   - these never fail, be careful when using combinators that expect failure.
+    * - Scip[Int] indicates how many things have been parsed (for rep and list)
+    *   - 0 result has not parsed anything
+    * - Scip[A] indicates parsing of some semantic object A
+    *   - parsing failure throws a control exception
+    *   - anyone catching the exception is responsible of resetting the parsing input to before the failed attempt */
   class Scip[+A](val run0: Scx => A)
+
 
   object Scip {
     inline def apply[A](inline run: Scx ?=> A) = new Scip(run(using _))
   }
 
-  inline def scatch[A](inline body: A)(inline alt: A): A =
-    try body
-    catch case e: ScipEx => alt
-
   inline def scx(using inline scx0: Scx): scx0.type = scx0
+
+  // for reasons beyond me, this seems to help
+  inline private def funApply[A, B](inline f: A => B, inline arg: A): B = f(arg)
 
   extension [A](inline scip: Scip[A]) {
     inline def run(using inline scx: Scx): A = scip.run0(scx)
@@ -112,6 +129,13 @@ object scip {
     inline def <~[B](inline other: Scip[B]): Scip[A]       = Scip { { val a = scip.run; other.run; a } }
     inline def ~>[B](inline other: Scip[B]): Scip[B]       = Scip { { scip.run; other.run } }
     inline def <~>[B](inline other: Scip[B]): Scip[(A, B)] = Scip { (scip.run, other.run) }
+    inline def |(inline other: Scip[A]): Scip[A] = Scip {
+      val start = scx.index
+      try scip.run
+      catch case e: ScipEx =>
+        scx.index = start
+        other.run
+    }
 
     inline def opt: Scip[Option[A]] = Scip {
       scip.map(Some.apply).orElse(Option.empty).run
@@ -122,16 +146,24 @@ object scip {
       val end = scx.index
       (start, end)
     }
+
     inline def map[B](inline f: A => B): Scip[B]           = Scip { f(scip.run) }
-    inline def flatMap[B](inline f: A => Scip[B]): Scip[B] = map(f).flatten
-    inline def orElse[B >: A](inline b: B): Scip[B] = Scip {
-      val start = scx.index
-      try scip.run
-      catch
-        case e: ScipEx =>
-          scx.index = start
-          b
+    inline def flatMap[B](inline f: A => Scip[B]): Scip[B] = Scip { funApply(f, scip.run).run }
+    inline def withFilter(inline p: A => Boolean): Scip[A] = scip.require(p)
+
+    inline def augment[B](inline f: Scip[A] => Scip[B]): Scip[(A, B)] = Scip{
+      var hack: A = null.asInstanceOf
+      val b = f(scip.map{x => hack = x; x}).run
+      (hack, b)
     }
+
+    inline def length: Scip[Int] = Scip {
+      val start = scx.index
+      scip.run
+      scx.index - start
+    }
+
+    inline def orElse[B >: A](inline b: B): Scip[B] = scip | Scip(b)
 
     /** always backtracks independent of result */
     inline def lookahead: Scip[A] = Scip {
@@ -142,7 +174,11 @@ object scip {
 
     /** converts exceptions into false */
     inline def attempt: Scip[Boolean] = Scip {
-      scatch { scip.run; true } { false }
+      val start = scx.index
+      try { scip.run; true }
+      catch case e: ScipEx =>
+        scx.index = start
+        false
     }
     inline def require(inline f: A => Boolean): Scip[A] = Scip {
       val res = scip.run
@@ -204,11 +240,11 @@ object scip {
       while scip.run do matches += 1
       matches
     }
-    inline def or(inline other: Scip[Boolean]): Scip[Boolean] = Scip {
+    inline def or(inline other: Scip[Boolean]): Scip[Boolean] = Scip { scip.run || other.run }
+    inline def and(inline other: Scip[Boolean]): Scip[Boolean] = Scip {
       val start = scx.index
-      scip.run || { scx.index = start; other.run }
+      scip.run && {other.run || {scx.index = start; false}}
     }
-    inline def and(inline other: Scip[Boolean]): Scip[Boolean] = Scip { scip.run && other.run }
 
     inline def ifso[B](inline other: Scip[B]): Scip[B] = Scip {
       if scip.run then other.run
@@ -218,13 +254,14 @@ object scip {
   }
 
   extension (inline scip: Scip[Int]) {
-    inline def min(i: Int): Scip[Boolean] = Scip {
-      inline if i == 0 then
-        scip.run
-        true
-      else
-        val start = scx.index
-        scip.run >= i || { scx.index = start; false }
+    inline def min(inline i: Int): Scip[Boolean] = Scip {
+      inline constValueOpt[i.type] match
+        case Some(0) =>
+          scip.run
+          true
+        case _ =>
+          val start = scx.index
+          scip.run >= i || { scx.index = start; false }
     }
   }
 
@@ -232,7 +269,7 @@ object scip {
 
   inline def bpred(inline p: Byte => Boolean): Scip[Boolean] = Scip { scx.containsNext(p) }
   inline def cpred(inline p: Int => Boolean): Scip[Boolean] = Scip {
-    scx.available > 0 && {
+    scx.available(1) && {
       val read = scx.intPred(p)
       scx.index += read
       read > 0
@@ -245,97 +282,71 @@ object scip {
     scx.index - start
   }
 
-  inline def choice[T](inline alternatives: Scip[T]*): Scip[T] = ${ choiceImpl('alternatives) }
-
-  def choiceImpl[T: Type](alternatives: Expr[Seq[Scip[T]]])(using quotes: Quotes): Expr[Scip[T]] = {
-    import quotes.reflect.*
-    alternatives match
-      case Varargs(args) => '{
-          Scip { scx ?=>
-            ${
-              args.init.foldRight[Expr[T]]('{ ${ args.last }.run }) { (next: Expr[Scip[T]], acc) =>
-                '{
-                  $next.orElse[T]($acc).run
-                }
-              }
-            }
-          }
-        }
-  }
-
-
-
   extension (s: String) {
-    inline def all: Scip[Boolean] = ${ stringMatchImpl('s) }
-    inline def any: Scip[Boolean] = ${ stringAltImpl('s) }
+    inline def all: Scip[Boolean] = ${ MacroImpls.stringMatchImpl('s) }
+    inline def any: Scip[Boolean] = ${ MacroImpls.stringAltImpl('s) }
   }
-  def stringMatchImpl(s: Expr[String])(using quotes: Quotes): Expr[Scip[Boolean]] =
-    import quotes.reflect.*
-    s.value match
-      case None =>
-        report.warning(s"value is not constant", s)
-        '{ exact($s.getBytes(UTF_8)) }
-      case Some(v) => bytesMatchImpl(v.getBytes(UTF_8))
 
-  def bytesMatchImpl(bytes: Array[Byte])(using quotes: Quotes): Expr[Scip[Boolean]] = {
-    import quotes.reflect.*
-    '{
-      Scip { (scx: Scx) ?=>
-        if scx.available >= ${ Expr(bytes.length) } &&
-          ${
-            val stmts: List[Expr[Boolean]] = bytes.iterator.zipWithIndex.map { (b, i) =>
-              '{ scx.ahead(${ Expr(i) }) == ${ Expr(b) } }
-            }.toList
-            stmts.reduceLeft((l, r) => '{ ${ l } && ${ r } })
-          }
-        then {
-          scx.index += ${ Expr(bytes.length) }
-          true
-
-        } else false
-      }
+  inline def seq(b: String): Scip[Boolean]      = seq(b.getBytes(StandardCharsets.UTF_8))
+  inline def seq(b: Array[Byte]): Scip[Boolean] = Scip { scx.contains(b) }
+  inline def alt(b: String): Scip[Boolean]      = alt(b.getBytes(StandardCharsets.UTF_8))
+  inline def alt(b: Array[Byte]): Scip[Boolean] = Scip {
+    scx.available(1) && {
+      val cur = scx.peek
+      b.exists(_ == cur)
     }
   }
 
-  def stringAltImpl(s: Expr[String])(using quotes: Quotes): Expr[Scip[Boolean]] =
-    import quotes.reflect.*
-    s.value match
-      case None =>
-        report.errorAndAbort(s"value is not constant", s)
-      case Some(v) => bytesAltImpl(v.getBytes(UTF_8))
+  object MacroImpls {
+    def stringMatchImpl(s: Expr[String])(using quotes: Quotes): Expr[Scip[Boolean]] =
+      import quotes.reflect.*
+      s.value match
+        case None =>
+          report.warning(s"value is not constant", s)
+          '{ seq($s.getBytes(UTF_8)) }
+        case Some(v) => bytesMatchImpl(v.getBytes(UTF_8))
 
-  def bytesAltImpl(bytes: Array[Byte])(using quotes: Quotes): Expr[Scip[Boolean]] = {
-    import quotes.reflect.*
-    '{
-      Scip { (scx: Scx) ?=>
-        if (scx.available <= 0) false
-        else ${
-          val alternatives = Alternatives(bytes.sorted.distinct.toList.map { b => Expr(b).asTerm })
-          Match(
-            '{ scx.peek }.asTerm,
-            List(
-              CaseDef(alternatives, None, '{ scx.index += 1; true }.asTerm),
-              CaseDef(Wildcard(), None, '{ false }.asTerm)
-            )
-          ).asExprOf[Boolean]
+    def bytesMatchImpl(bytes: Array[Byte])(using quotes: Quotes): Expr[Scip[Boolean]] = {
+      import quotes.reflect.*
+      '{
+        Scip { (scx: Scx) ?=>
+          scx.available(${ Expr(bytes.length) }) && ${
+            val stmts = bytes.iterator.zipWithIndex.map { (b, i) =>
+              '{ scx.ahead(${ Expr(i) }, ${ Expr(b) }) }
+            }
+            stmts.reduceLeft((l, r) => '{ ${ l } && ${ r } })
+          } && {
+            scx.index += ${ Expr(bytes.length) }
+            true
+          }
         }
       }
     }
-  }
 
-  inline def exact(b: String): Scip[Boolean] = exact(b.getBytes(StandardCharsets.UTF_8))
+    def stringAltImpl(s: Expr[String])(using quotes: Quotes): Expr[Scip[Boolean]] =
+      import quotes.reflect.*
+      s.value match
+        case None =>
+          report.errorAndAbort(s"value is not constant", s)
+        case Some(v) => bytesAltImpl(v.getBytes(UTF_8))
 
-  inline def exact(b: Array[Byte]): Scip[Boolean] = Scip {
-    val len = b.length
-    if !(scx.available >= len) then false
-    else
-      @tailrec def rec(i: Int): Boolean =
-        if i >= len then
-          scx.index += len
-          true
-        else if b(i) == scx.ahead(i) then rec(i + 1)
-        else false
-      rec(0)
+    def bytesAltImpl(bytes: Array[Byte])(using quotes: Quotes): Expr[Scip[Boolean]] = {
+      import quotes.reflect.*
+      '{
+        Scip { (scx: Scx) ?=>
+          scx.available(1) && ${
+            val alternatives = Alternatives(bytes.sorted.distinct.toList.map { b => Expr(b).asTerm })
+            Match(
+              '{ scx.peek }.asTerm,
+              List(
+                CaseDef(alternatives, None, '{ scx.index += 1; true }.asTerm),
+                CaseDef(Wildcard(), None, '{ false }.asTerm)
+              )
+            ).asExprOf[Boolean]
+          }
+        }
+      }
+    }
   }
 
 }

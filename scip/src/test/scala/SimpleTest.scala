@@ -98,7 +98,7 @@ class SimpleTest extends munit.FunSuite {
   test("until") {
     val ut = until("abc".any).min(1).rep.min(1).str
 
-    val res = ut.run0(Scx("eeeeeee"))
+    val res = ut.run0(Scx("eeeeeeebee"))
     assertEquals(res, "eeeeeee")
   }
 
@@ -107,7 +107,7 @@ class SimpleTest extends munit.FunSuite {
       val as   = "a".all.rep.min(1).str
       val bs   = "b".all.rep.min(2).str
       val cs   = "c".all.rep.min(3).str
-      val choi = choice(as, bs, cs)
+      val choi = (as | bs | cs)
 
       val res = choi.run0(Scx("bbaccc"))
       assertEquals(res, "bb")
