@@ -14,7 +14,15 @@ class SimpleTest extends munit.FunSuite {
     given scx: Scx   = Scx(input)
     val res          = input.all.str.run
     assertEquals(scx.index, scx.input.length)
-    assertEquals(res, "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")
+    assertEquals(res, input)
+  }
+
+  test("dynamic sequence") {
+    inline val input = "abc"
+    given scx: Scx   = Scx(input)
+    val res          = seq(input).str.run
+    assertEquals(scx.index, scx.input.length)
+    assertEquals(res, input)
   }
 
   test("bitcount") {

@@ -212,14 +212,16 @@ object scip {
       else
         println(" " * scx.depth * 2 + s"+ $name ${scx.debugat(scx.index)}")
         scx.depth += 1
-        try scip.run
+        try
+          val res = scip.run
+          scx.depth -= 1
+          println(" " * scx.depth * 2 + s"- $name ${scx.debugat(scx.index)} ($res)")
+          res
         catch
           case e: ScipEx =>
-            println(" " * (scx.depth - 1) * 2 + s"! $name (${e.getMessage})")
+            scx.depth -= 1
+            println(" " * scx.depth * 2 + s"! $name ${scx.debugat(scx.index)}")
             throw e
-        finally
-          scx.depth -= 1
-          println(" " * scx.depth * 2 + s"- $name ${scx.debugat(scx.index)}")
     }
 
   }
@@ -288,7 +290,7 @@ object scip {
   }
 
   inline def seq(b: String): Scip[Boolean]      = seq(b.getBytes(StandardCharsets.UTF_8))
-  inline def seq(b: Array[Byte]): Scip[Boolean] = Scip { scx.contains(b) }
+  inline def seq(b: Array[Byte]): Scip[Boolean] = Scip { scx.contains(b) && {scx.index += b.length; true} }
   inline def alt(b: String): Scip[Boolean]      = alt(b.getBytes(StandardCharsets.UTF_8))
   inline def alt(b: Array[Byte]): Scip[Boolean] = Scip {
     scx.available(1) && {
