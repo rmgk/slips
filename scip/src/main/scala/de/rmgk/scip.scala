@@ -215,7 +215,7 @@ object scip {
         try
           val res = scip.run
           scx.depth -= 1
-          println(" " * scx.depth * 2 + s"- $name ${scx.debugat(scx.index)} ($res)")
+          println(" " * scx.depth * 2 + s"- $name ${scx.debugat(scx.index)} (${res.toString.take(42)})")
           res
         catch
           case e: ScipEx =>
