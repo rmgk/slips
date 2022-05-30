@@ -1,6 +1,11 @@
 Changelog
 =========
 
+v0.4.3
+
+	Scip
+	* better behaved boolean parsers
+
 v0.4.2
 
 	Scip
