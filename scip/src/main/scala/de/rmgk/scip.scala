@@ -220,30 +220,25 @@ object scip {
 
   }
 
-  @tailrec
-  def uninlined[a](using quotes: Quotes)(expr: quotes.reflect.Term): quotes.reflect.Term =
+  def unwrapLast[A](using
+      quotes: Quotes
+  )(expr: quotes.reflect.Term)(cont: quotes.reflect.Term => Option[quotes.reflect.Term]): Option[quotes.reflect.Term] =
     import quotes.reflect.*
     expr match
-      case Inlined(_, _, t) => uninlined(t)
-      case other            => other
+      case Inlined(_, _, t)                                 => unwrapLast(t)(cont)
+      case Match(_, List(CaseDef(Wildcard(), None, inner))) => unwrapLast(inner)(cont)
+      case Block(statements, expr)                          => unwrapLast(expr)(cont).map(res => Block(statements, res))
+      case other                                            => cont(other)
 
   def applyInBlock[B: Type](betaReduced: Expr[Scip[B]], scx: Expr[Scx])(using quotes: Quotes): Expr[B] = {
     import quotes.reflect.*
-    val unwrappedApplied: Option[Expr[B]] = uninlined(using quotes)(betaReduced.asTerm) match
-      case Block(statements, expr) =>
-        val unlayerMatch = expr match {
-          case Match(_, List(CaseDef(Wildcard(), None, inner))) => inner
-          case other                                            => other
-        }
-        unlayerMatch.asExprOf[Scip[B]] match
-          case '{ new Scip[B]($scxfun) } =>
-            Some(Block(statements, '{ $scxfun.apply($scx) }.asTerm).asExprOf[B])
-          case other =>
-            None
-        end match
-      case other =>
-        None
-    unwrappedApplied.getOrElse('{ $betaReduced.run0($scx) })
+    val fixed = unwrapLast(using quotes)(betaReduced.asTerm) { unlayerMatch =>
+      unlayerMatch.asExprOf[Scip[B]] match
+        case '{ new Scip[B]($scxfun) } =>
+          Some(Expr.betaReduce('{ $scxfun.apply($scx) }).asTerm)
+        case other => None
+    }.map(e => e.asExprOf[B])
+    Expr.betaReduce(fixed.getOrElse('{ $betaReduced.run0($scx) }))
   }
 
   def flatMapImpl[A: Type, B: Type](scip: Expr[Scip[A]], f: Expr[A => Scip[B]])(using quotes: Quotes): Expr[Scip[B]] =
@@ -251,7 +246,7 @@ object scip {
     '{
       Scip { scx ?=>
         ${
-          val applied  = applyInBlock(scip, 'scx)
+          val applied = applyInBlock(scip, 'scx)
           val res     = Expr.betaReduce('{ $f($applied) })
           applyInBlock(res, 'scx)
         }
