@@ -38,7 +38,7 @@ object scip {
     def contains(bytes: Array[Byte]): Boolean =
       val len = bytes.length
       available(len) || { return false }
-      @tailrec def rec(i: Int): Boolean = i >= len || bytes(i) == input(i) && rec(i + 1); rec(0)
+      @tailrec def rec(i: Int): Boolean = i >= len || bytes(i) == input(index + i) && rec(i + 1); rec(0)
       // java.util.Arrays.equals(bytes, 0, bytes.length, input, index, math.min(index + bytes.length, maxpos))
 
     def available(min: Int): Boolean    = maxpos >= index + min

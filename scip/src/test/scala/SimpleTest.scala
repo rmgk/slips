@@ -23,6 +23,10 @@ class SimpleTest extends munit.FunSuite {
     val res          = seq(input).str.run
     assertEquals(scx.index, scx.input.length)
     assertEquals(res, input)
+
+    val res2 = (seq("some stuff") and seq("[")).str.run0(Scx("some stuff[ eh"))
+    assertEquals(res2, "some stuff[")
+
   }
 
   test("bitcount") {
@@ -105,6 +109,10 @@ class SimpleTest extends munit.FunSuite {
 
     val res = ut.run0(Scx("eeeeeeebee"))
     assertEquals(res, "eeeeeee")
+
+    val res2 = until(seq("]").trace("close")).min(0).str.run0(Scx("test] meh"))
+    assertEquals(res2, "test")
+
   }
 
   test("choice") {
