@@ -119,7 +119,7 @@ object scip {
   inline private def funApply[A, B](inline f: A => B, inline arg: A): B = f(arg)
 
   extension [A](inline scip: Scip[A]) {
-    inline def run(using inline scx: Scx): A               = scip.run0(scx)
+    inline def run(using inline scx: Scx): A               = ${ MacroImpls.applyInBlock('scip, 'scx) }
     inline def <~[B](inline other: Scip[B]): Scip[A]       = Scip { { val a = scip.run; other.run; a } }
     inline def ~>[B](inline other: Scip[B]): Scip[B]       = Scip { { scip.run; other.run } }
     inline def <~>[B](inline other: Scip[B]): Scip[(A, B)] = Scip { (scip.run, other.run) }
@@ -132,28 +132,29 @@ object scip {
           other.run
     }
 
-    inline def map[B](inline f: A => B): Scip[B]           = ${ mapImpl('scip, 'f) }
-    inline def flatMap[B](inline f: A => Scip[B]): Scip[B] = ${ flatMapImpl('scip, 'f) }
+    inline def map[B](inline f: A => B): Scip[B]           = Scip { f(scip.run) }
+    inline def flatMap[B](inline f: A => Scip[B]): Scip[B] = Scip { f(scip.run).run }
     inline def withFilter(inline p: A => Boolean): Scip[A] = scip.require(p)
 
     inline def capture: Scip[(Int, Int)] = Scip {
       val start = scx.index
       scip.run
-      val end = scx.index
-      (start, end)
-    }
-    inline def augment[B](inline f: Scip[A] => Scip[B]): Scip[(A, B)] = Scip {
-      var hack: A = null.asInstanceOf
-      val b = f(scip.map { x =>
-        hack = x; x
-      }).run
-      (hack, b)
+      (start, scx.index)
     }
 
     inline def length: Scip[Int] = Scip {
       val start = scx.index
       scip.run
       scx.index - start
+    }
+
+    inline def augment[B](inline f: Scip[A] => Scip[B]): Scip[(A, B)] = Scip {
+      var hack: A = null.asInstanceOf
+      val b = f(scip.map { x =>
+        hack = x; x
+      }).run
+      if (hack == null) scx.fail
+      (hack, b)
     }
 
     /** always backtracks independent of result */
@@ -220,50 +221,6 @@ object scip {
 
   }
 
-  def unwrapLast[A](using
-      quotes: Quotes
-  )(expr: quotes.reflect.Term)(cont: quotes.reflect.Term => Option[quotes.reflect.Term]): Option[quotes.reflect.Term] =
-    import quotes.reflect.*
-    expr match
-      case Inlined(_, _, t)                                 => unwrapLast(t)(cont)
-      case Match(_, List(CaseDef(Wildcard(), None, inner))) => unwrapLast(inner)(cont)
-      case Block(statements, expr)                          => unwrapLast(expr)(cont).map(res => Block(statements, res))
-      case other                                            => cont(other)
-
-  def applyInBlock[B: Type](betaReduced: Expr[Scip[B]], scx: Expr[Scx])(using quotes: Quotes): Expr[B] = {
-    import quotes.reflect.*
-    val fixed = unwrapLast(using quotes)(betaReduced.asTerm) { unlayerMatch =>
-      unlayerMatch.asExprOf[Scip[B]] match
-        case '{ new Scip[B]($scxfun) } =>
-          Some(Expr.betaReduce('{ $scxfun.apply($scx) }).asTerm)
-        case other => None
-    }.map(e => e.asExprOf[B])
-    Expr.betaReduce(fixed.getOrElse('{ $betaReduced.run0($scx) }))
-  }
-
-  def flatMapImpl[A: Type, B: Type](scip: Expr[Scip[A]], f: Expr[A => Scip[B]])(using quotes: Quotes): Expr[Scip[B]] =
-    import quotes.reflect.*
-    '{
-      Scip { scx ?=>
-        ${
-          val applied = applyInBlock(scip, 'scx)
-          val res     = Expr.betaReduce('{ $f($applied) })
-          applyInBlock(res, 'scx)
-        }
-      }
-    }
-
-  def mapImpl[A: Type, B: Type](scip: Expr[Scip[A]], f: Expr[A => B])(using quotes: Quotes): Expr[Scip[B]] =
-    import quotes.reflect.*
-    '{
-      Scip { scx ?=>
-        ${
-          val applied = applyInBlock(scip, 'scx)
-          Expr.betaReduce('{ $f($applied) })
-        }
-      }
-    }
-
   extension [A](inline scip: Scip[Scip[A]]) inline def flatten: Scip[A] = Scip(scip.run.run)
 
   extension (inline scip: Scip[Boolean]) {
@@ -294,9 +251,9 @@ object scip {
   }
 
   extension (inline scip: Scip[Int]) {
-    inline def min(inline i: Int): Scip[Boolean] = Scip {
-      inline constValueOpt[i.type] match
-        case Some(0) =>
+    inline def min(i: Int): Scip[Boolean] = Scip {
+      inline i match
+        case 0 =>
           scip.run
           true
         case _ =>
@@ -327,9 +284,13 @@ object scip {
     inline def any: Scip[Boolean] = ${ MacroImpls.stringAltImpl('s) }
   }
 
-  inline def seq(inline b: String): Scip[Boolean] = seq(b.getBytes(StandardCharsets.UTF_8))
-  inline def seq(b: Array[Byte]): Scip[Boolean]   = Scip { scx.contains(b) && { scx.index += b.length; true } }
-  inline def alt(inline b: String): Scip[Boolean] = alt(b.getBytes(StandardCharsets.UTF_8))
+  inline def seq(inline b: String): Scip[Boolean] =
+    val bytes = b.getBytes(StandardCharsets.UTF_8)
+    seq(bytes)
+  inline def seq(b: Array[Byte]): Scip[Boolean] = Scip { scx.contains(b) && { scx.index += b.length; true } }
+  inline def alt(inline b: String): Scip[Boolean] =
+    val bytes = b.getBytes(StandardCharsets.UTF_8)
+    alt(bytes)
   inline def alt(b: Array[Byte]): Scip[Boolean] = Scip {
     scx.available(1) && {
       val cur = scx.peek
@@ -387,6 +348,32 @@ object scip {
         }
       }
     }
+
+    def applyInBlock[B: Type](scip: Expr[Scip[B]], scx: Expr[Scx])(using quotes: Quotes): Expr[B] = {
+      import quotes.reflect.*
+      val maybeBlock = cleanBlock(scip.asTerm)
+      val fixed = maybeBlock match {
+        case Block(stmts, expr) => expr.asExpr match
+            case '{ new Scip[B]($scxfun) } =>
+              Some(cleanBlock(Block(stmts, Expr.betaReduce('{ $scxfun.apply($scx) }).asTerm)).asExprOf[B])
+            case other => None
+        case other => None
+      }
+      Expr.betaReduce(fixed.getOrElse('{ $scip.run0($scx) }))
+    }
+
+    def cleanBlock[A](using quotes: Quotes)(expr: quotes.reflect.Term): quotes.reflect.Term = {
+      import quotes.reflect.*
+      expr match
+        case Inlined(_, _, t)                                 => cleanBlock(t)
+        case Match(_, List(CaseDef(Wildcard(), None, inner))) => cleanBlock(inner)
+        case Block(statements, expr) => cleanBlock(expr) match
+            case Block(innerstmts, expr) => Block(statements ::: innerstmts, expr)
+            case expr                    => Block(statements, expr)
+        case Typed(expr, tt) => cleanBlock(expr)
+        case other           => other
+    }
+
   }
 
 }
