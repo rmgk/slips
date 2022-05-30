@@ -46,7 +46,7 @@ object scip {
 
     inline def intPred(inline p: Int => Boolean): Int = {
       val bs = this.peek
-      val b = bs & 0xff
+      val b  = bs & 0xff
       if (b & Utf8bits.maxBit) == 0 then if p(b) then 1 else 0
       else
         val count = Integer.numberOfLeadingZeros(~bs) - 24
@@ -57,9 +57,9 @@ object scip {
         if (p(v)) count else 0
     }
 
-    private def parse2(b: Int): Int   = Utf8bits.grab(Utf8bits.addLowest(b, 0, 5), 1, 2)
-    private def parse3(b: Int): Int   = Utf8bits.grab(Utf8bits.addLowest(b, 0, 4), 1, 3)
-    private def parse4(b: Int): Int   = Utf8bits.grab(Utf8bits.addLowest(b, 0, 3), 1, 4)
+    private def parse2(b: Int): Int = Utf8bits.grab(Utf8bits.addLowest(b, 0, 5), 1, 2)
+    private def parse3(b: Int): Int = Utf8bits.grab(Utf8bits.addLowest(b, 0, 4), 1, 3)
+    private def parse4(b: Int): Int = Utf8bits.grab(Utf8bits.addLowest(b, 0, 3), 1, 4)
 
     object Utf8bits {
 
@@ -119,7 +119,7 @@ object scip {
   inline private def funApply[A, B](inline f: A => B, inline arg: A): B = f(arg)
 
   extension [A](inline scip: Scip[A]) {
-    inline def run(using inline scx: Scx): A = scip.run0(scx)
+    inline def run(using inline scx: Scx): A               = scip.run0(scx)
     inline def <~[B](inline other: Scip[B]): Scip[A]       = Scip { { val a = scip.run; other.run; a } }
     inline def ~>[B](inline other: Scip[B]): Scip[B]       = Scip { { scip.run; other.run } }
     inline def <~>[B](inline other: Scip[B]): Scip[(A, B)] = Scip { (scip.run, other.run) }
@@ -132,8 +132,8 @@ object scip {
           other.run
     }
 
-    inline def map[B](inline f: A => B): Scip[B]           = Scip { f(scip.run) }
-    inline def flatMap[B](inline f: A => Scip[B]): Scip[B] = Scip { funApply(f, scip.run).run }
+    inline def map[B](inline f: A => B): Scip[B]           = ${ mapImpl('scip, 'f) }
+    inline def flatMap[B](inline f: A => Scip[B]): Scip[B] = ${ flatMapImpl('scip, 'f) }
     inline def withFilter(inline p: A => Boolean): Scip[A] = scip.require(p)
 
     inline def capture: Scip[(Int, Int)] = Scip {
@@ -177,7 +177,7 @@ object scip {
       if f(res) then res else scx.fail
     }
 
-    inline def opt: Scip[Option[A]] = scip.map(Some.apply) | Scip{None}
+    inline def opt: Scip[Option[A]] = scip.map(Some.apply) | Scip { None }
 
     inline def list(inline sep: Scip[Boolean]): Scip[List[A]] = Scip {
       val acc         = ListBuffer.empty[A]
@@ -219,6 +219,55 @@ object scip {
     }
 
   }
+
+  @tailrec
+  def uninlined[a](using quotes: Quotes)(expr: quotes.reflect.Term): quotes.reflect.Term =
+    import quotes.reflect.*
+    expr match
+      case Inlined(_, _, t) => uninlined(t)
+      case other            => other
+
+  def applyInBlock[B: Type](betaReduced: Expr[Scip[B]], scx: Expr[Scx])(using quotes: Quotes): Expr[B] = {
+    import quotes.reflect.*
+    val unwrappedApplied: Option[Expr[B]] = uninlined(using quotes)(betaReduced.asTerm) match
+      case Block(statements, expr) =>
+        val unlayerMatch = expr match {
+          case Match(_, List(CaseDef(Wildcard(), None, inner))) => inner
+          case other                                            => other
+        }
+        unlayerMatch.asExprOf[Scip[B]] match
+          case '{ new Scip[B]($scxfun) } =>
+            Some(Block(statements, '{ $scxfun.apply($scx) }.asTerm).asExprOf[B])
+          case other =>
+            None
+        end match
+      case other =>
+        None
+    unwrappedApplied.getOrElse('{ $betaReduced.run0($scx) })
+  }
+
+  def flatMapImpl[A: Type, B: Type](scip: Expr[Scip[A]], f: Expr[A => Scip[B]])(using quotes: Quotes): Expr[Scip[B]] =
+    import quotes.reflect.*
+    '{
+      Scip { scx ?=>
+        ${
+          val applied  = applyInBlock(scip, 'scx)
+          val res     = Expr.betaReduce('{ $f($applied) })
+          applyInBlock(res, 'scx)
+        }
+      }
+    }
+
+  def mapImpl[A: Type, B: Type](scip: Expr[Scip[A]], f: Expr[A => B])(using quotes: Quotes): Expr[Scip[B]] =
+    import quotes.reflect.*
+    '{
+      Scip { scx ?=>
+        ${
+          val applied = applyInBlock(scip, 'scx)
+          Expr.betaReduce('{ $f($applied) })
+        }
+      }
+    }
 
   extension [A](inline scip: Scip[Scip[A]]) inline def flatten: Scip[A] = Scip(scip.run.run)
 
@@ -283,9 +332,9 @@ object scip {
     inline def any: Scip[Boolean] = ${ MacroImpls.stringAltImpl('s) }
   }
 
-  inline def seq(inline b: String): Scip[Boolean]      = seq(b.getBytes(StandardCharsets.UTF_8))
-  inline def seq(b: Array[Byte]): Scip[Boolean] = Scip { scx.contains(b) && { scx.index += b.length; true } }
-  inline def alt(inline b: String): Scip[Boolean]      = alt(b.getBytes(StandardCharsets.UTF_8))
+  inline def seq(inline b: String): Scip[Boolean] = seq(b.getBytes(StandardCharsets.UTF_8))
+  inline def seq(b: Array[Byte]): Scip[Boolean]   = Scip { scx.contains(b) && { scx.index += b.length; true } }
+  inline def alt(inline b: String): Scip[Boolean] = alt(b.getBytes(StandardCharsets.UTF_8))
   inline def alt(b: Array[Byte]): Scip[Boolean] = Scip {
     scx.available(1) && {
       val cur = scx.peek

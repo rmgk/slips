@@ -110,7 +110,7 @@ class SimpleTest extends munit.FunSuite {
     val res = ut.run0(Scx("eeeeeeebee"))
     assertEquals(res, "eeeeeee")
 
-    val res2 = until(seq("]").trace("close")).min(0).str.run0(Scx("test] meh"))
+    val res2 = until(seq("]")).min(0).str.run0(Scx("test] meh"))
     assertEquals(res2, "test")
 
   }
