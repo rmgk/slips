@@ -9,7 +9,6 @@ import scala.compiletime.erasedValue
 import scala.quoted.*
 import scala.util.NotGiven
 import scala.util.control.ControlThrowable
-import scala.Tuple.*
 import scala.deriving.Mirror
 import scala.compiletime.summonFrom
 import scala.compiletime.constValueOpt
@@ -329,21 +328,61 @@ object scip {
       s.value match
         case None =>
           report.errorAndAbort(s"value is not constant", s)
-        case Some(v) => bytesAltImpl(v.getBytes(UTF_8))
+        case Some(v) =>
+          val bytes = v.map(_.toString.getBytes(UTF_8).toSeq)
+          bytesAltImpl(trieFromBytes(bytes))
 
-    def bytesAltImpl(bytes: Array[Byte])(using quotes: Quotes): Expr[Scip[Boolean]] = {
+    case class MiniTrie(elems: Seq[Byte], children: Map[Byte, MiniTrie])
+
+    def trieFromBytes(bytes: Seq[Seq[Byte]]): MiniTrie = {
+      val elems    = bytes.filter(_.length == 1).map(_.head)
+      val other    = bytes.filter(_.length > 1)
+      val children = other.groupBy(_.head).view.mapValues(ss => trieFromBytes(ss.map(_.drop(1)))).toMap
+      MiniTrie(elems, children)
+    }
+
+    def bytesAltImpl(outerBytes: MiniTrie)(using quotes: Quotes): Expr[Scip[Boolean]] = {
       import quotes.reflect.*
       '{
         Scip { (scx: Scx) ?=>
-          scx.available(1) && ${
-            val alternatives = Alternatives(bytes.sorted.distinct.toList.map { b => Expr(b).asTerm })
-            Match(
-              '{ scx.peek }.asTerm,
-              List(
-                CaseDef(alternatives, None, '{ scx.index += 1; true }.asTerm),
-                CaseDef(Wildcard(), None, '{ false }.asTerm)
-              )
-            ).asExprOf[Boolean]
+          ${
+            def terminals(bytes: Seq[Byte], len: Int): Option[CaseDef] =
+              if bytes.isEmpty then None
+              else
+                Some(CaseDef(
+                  Alternatives(bytes.sorted.distinct.toList.map { b => Expr(b).asTerm }),
+                  None,
+                  '{
+                    scx.index += ${ Expr(len) }
+                    true
+                  }.asTerm
+                ))
+
+            val wildcardCase = CaseDef(Wildcard(), None, '{ false }.asTerm)
+
+            def recurse(bytes: MiniTrie, level: Int): Expr[Boolean] = {
+              val termCases = terminals(bytes.elems, level)
+
+              val childCases = bytes.children.map { (b, trie) =>
+                val inner = recurse(trie, level + 1)
+                CaseDef(Expr(b).asTerm, None, inner.asTerm)
+              }
+
+              val res = '{
+                scx.available(${ Expr(level) }) && ${
+                  Match(
+                    '{ scx.input(scx.index + ${ Expr(level - 1) }) }.asTerm,
+                    List[IterableOnce[CaseDef]](
+                      termCases,
+                      childCases,
+                      Some(wildcardCase),
+                    ).flatten
+                  ).asExprOf[Boolean]
+                }
+              }
+              res
+            }
+            recurse(outerBytes, 1)
           }
         }
       }
