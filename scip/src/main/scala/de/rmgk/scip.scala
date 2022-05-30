@@ -353,10 +353,11 @@ object scip {
       import quotes.reflect.*
       val maybeBlock = cleanBlock(scip.asTerm)
       val fixed = maybeBlock match {
-        case Block(stmts, expr) => expr.asExpr match
+        case Block(stmts, expr) => expr.asExpr match {
             case '{ new Scip[B]($scxfun) } =>
               Some(cleanBlock(Block(stmts, Expr.betaReduce('{ $scxfun.apply($scx) }).asTerm)).asExprOf[B])
             case other => None
+          }
         case other => None
       }
       Expr.betaReduce(fixed.getOrElse('{ $scip.run0($scx) }))
