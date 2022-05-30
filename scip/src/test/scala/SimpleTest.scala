@@ -29,9 +29,6 @@ class SimpleTest extends munit.FunSuite {
     val codePoint = 0x1f349
     val scx       = Scx(new String(Character.toChars(codePoint)))
     import scx.Utf8bits.*
-    assertEquals(highest(Integer.parseInt("11100000", 2), 4), 3)
-    assertEquals(highest(scx.peek, 4), 4)
-
     assertEquals(scx.intPred { _ == codePoint }, 4)
   }
 

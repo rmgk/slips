@@ -24,13 +24,11 @@ object scip {
       val maxpos: Int,
       var depth: Int,
       var lastFail: Int,
-      var reason: String,
       val tracing: Boolean,
   ) {
 
     object ScipExInstance extends ScipEx {
-      override def getMessage: String =
-        s"$reason: ${debugat(index)}"
+      override def getMessage: String = s"idx: ${debugat(index)}; fail: ${debugat(lastFail)}"
     }
 
     def debugat(i: Int): String = s"${index}»${str(i, i + 12).replaceAll("\\n", "\\\\n")}«"
@@ -38,16 +36,20 @@ object scip {
     def str(l: Int, r: Int) = new String(input, l, math.min(r, maxpos) - l, UTF_8)
 
     def contains(bytes: Array[Byte]): Boolean =
-      java.util.Arrays.equals(bytes, 0, bytes.length, input, index, math.min(index + bytes.length, maxpos))
+      val len = bytes.length
+      available(len) || { return false }
+      @tailrec def rec(i: Int): Boolean = i >= len || bytes(i) == input(i) && rec(i + 1); rec(0)
+      // java.util.Arrays.equals(bytes, 0, bytes.length, input, index, math.min(index + bytes.length, maxpos))
 
     def available(min: Int): Boolean    = maxpos >= index + min
     def ahead(i: Int, b: Byte): Boolean = input(index + i) == b
 
     inline def intPred(inline p: Int => Boolean): Int = {
-      val b = this.peek & 0xff
+      val bs = this.peek
+      val b = bs & 0xff
       if (b & Utf8bits.maxBit) == 0 then if p(b) then 1 else 0
       else
-        val count = highest4(b)
+        val count = Integer.numberOfLeadingZeros(~bs) - 24
         val v = (count: @switch) match
           case 2 => parse2(b)
           case 3 => parse3(b)
@@ -55,25 +57,18 @@ object scip {
         if (p(v)) count else 0
     }
 
-    private def parse2(b: Int): Int = Utf8bits.grab(Utf8bits.addLowest(b, 0, 5), 1, 2)
-    private def parse3(b: Int): Int = Utf8bits.grab(Utf8bits.addLowest(b, 0, 4), 1, 3)
-    private def parse4(b: Int): Int = Utf8bits.grab(Utf8bits.addLowest(b, 0, 3), 1, 4)
-    private def highest4(b: Int)    = Utf8bits.highest(b, 4)
+    private def parse2(b: Int): Int   = Utf8bits.grab(Utf8bits.addLowest(b, 0, 5), 1, 2)
+    private def parse3(b: Int): Int   = Utf8bits.grab(Utf8bits.addLowest(b, 0, 4), 1, 3)
+    private def parse4(b: Int): Int   = Utf8bits.grab(Utf8bits.addLowest(b, 0, 3), 1, 4)
 
     object Utf8bits {
 
       inline val maxBit: 128                               = 1 << 7
       inline def lowest(inline b: Int, inline n: Int): Int = b & ((1 << n) - 1)
-      inline def bitAt(b: Int, inline pos: Int): Int       = (b & maxBit) >>> (7 - pos)
       inline def addLowest(b: Int, acc: Int, n: Int): Int  = lowest(b, n) | (acc << n)
       inline def grab(acc: Int, inline pos: Int, inline max: Int): Int =
         inline if (pos >= max) then acc
         else grab(addLowest(input(index + pos) & 0xff, acc, 6), pos + 1, max)
-      inline def highest(b: Int, inline depth: Int): Int =
-        inline if depth <= 0 then 0
-        else
-          val isSet: Int = ((b & maxBit) >>> 7)
-          isSet + isSet * highest(b << 1, depth - 1)
     }
   }
 
@@ -98,7 +93,7 @@ object scip {
   object Scx {
     def apply(s: String): Scx =
       val b = s.getBytes(UTF_8)
-      Scx(b, index = 0, maxpos = b.length, depth = 0, lastFail = -1, reason = "", tracing = true)
+      Scx(b, index = 0, maxpos = b.length, depth = 0, lastFail = -1, tracing = true)
   }
 
   /** Ground rules:
@@ -110,9 +105,9 @@ object scip {
     *   - 0 result has not parsed anything
     * - Scip[A] indicates parsing of some semantic object A
     *   - parsing failure throws a control exception
-    *   - anyone catching the exception is responsible of resetting the parsing input to before the failed attempt */
+    *   - anyone catching the exception is responsible of resetting the parsing input to before the failed attempt
+    */
   class Scip[+A](val run0: Scx => A)
-
 
   object Scip {
     inline def apply[A](inline run: Scx ?=> A) = new Scip(run(using _))
@@ -125,35 +120,33 @@ object scip {
 
   extension [A](inline scip: Scip[A]) {
     inline def run(using inline scx: Scx): A = scip.run0(scx)
-    // inline def ~[B](inline other: Scip[B]): Scip[Unit]              = Scip { { scip.run; other.run } }
     inline def <~[B](inline other: Scip[B]): Scip[A]       = Scip { { val a = scip.run; other.run; a } }
     inline def ~>[B](inline other: Scip[B]): Scip[B]       = Scip { { scip.run; other.run } }
     inline def <~>[B](inline other: Scip[B]): Scip[(A, B)] = Scip { (scip.run, other.run) }
-    inline def |(inline other: Scip[A]): Scip[A] = Scip {
+    inline def |[B >: A](inline other: Scip[B]): Scip[B] = Scip {
       val start = scx.index
       try scip.run
-      catch case e: ScipEx =>
-        scx.index = start
-        other.run
-    }
-
-    inline def opt: Scip[Option[A]] = Scip {
-      scip.map(Some.apply).orElse(Option.empty).run
-    }
-    inline def capture: Scip[(Int, Int)] = Scip {
-      val start = scx.index
-      scip.run
-      val end = scx.index
-      (start, end)
+      catch
+        case e: ScipEx =>
+          scx.index = start
+          other.run
     }
 
     inline def map[B](inline f: A => B): Scip[B]           = Scip { f(scip.run) }
     inline def flatMap[B](inline f: A => Scip[B]): Scip[B] = Scip { funApply(f, scip.run).run }
     inline def withFilter(inline p: A => Boolean): Scip[A] = scip.require(p)
 
-    inline def augment[B](inline f: Scip[A] => Scip[B]): Scip[(A, B)] = Scip{
+    inline def capture: Scip[(Int, Int)] = Scip {
+      val start = scx.index
+      scip.run
+      val end = scx.index
+      (start, end)
+    }
+    inline def augment[B](inline f: Scip[A] => Scip[B]): Scip[(A, B)] = Scip {
       var hack: A = null.asInstanceOf
-      val b = f(scip.map{x => hack = x; x}).run
+      val b = f(scip.map { x =>
+        hack = x; x
+      }).run
       (hack, b)
     }
 
@@ -162,8 +155,6 @@ object scip {
       scip.run
       scx.index - start
     }
-
-    inline def orElse[B >: A](inline b: B): Scip[B] = scip | Scip(b)
 
     /** always backtracks independent of result */
     inline def lookahead: Scip[A] = Scip {
@@ -176,14 +167,17 @@ object scip {
     inline def attempt: Scip[Boolean] = Scip {
       val start = scx.index
       try { scip.run; true }
-      catch case e: ScipEx =>
-        scx.index = start
-        false
+      catch
+        case e: ScipEx =>
+          scx.index = start
+          false
     }
     inline def require(inline f: A => Boolean): Scip[A] = Scip {
       val res = scip.run
       if f(res) then res else scx.fail
     }
+
+    inline def opt: Scip[Option[A]] = scip.map(Some.apply) | Scip{None}
 
     inline def list(inline sep: Scip[Boolean]): Scip[List[A]] = Scip {
       val acc         = ListBuffer.empty[A]
@@ -220,7 +214,7 @@ object scip {
         catch
           case e: ScipEx =>
             scx.depth -= 1
-            println(" " * scx.depth * 2 + s"! $name ${scx.debugat(scx.index)}")
+            println(" " * scx.depth * 2 + s"! $name ${scx.debugat(scx.lastFail)}")
             throw e
     }
 
@@ -245,7 +239,7 @@ object scip {
     inline def or(inline other: Scip[Boolean]): Scip[Boolean] = Scip { scip.run || other.run }
     inline def and(inline other: Scip[Boolean]): Scip[Boolean] = Scip {
       val start = scx.index
-      scip.run && {other.run || {scx.index = start; false}}
+      scip.run && { other.run || { scx.index = start; false } }
     }
 
     inline def ifso[B](inline other: Scip[B]): Scip[B] = Scip {
@@ -289,9 +283,9 @@ object scip {
     inline def any: Scip[Boolean] = ${ MacroImpls.stringAltImpl('s) }
   }
 
-  inline def seq(b: String): Scip[Boolean]      = seq(b.getBytes(StandardCharsets.UTF_8))
-  inline def seq(b: Array[Byte]): Scip[Boolean] = Scip { scx.contains(b) && {scx.index += b.length; true} }
-  inline def alt(b: String): Scip[Boolean]      = alt(b.getBytes(StandardCharsets.UTF_8))
+  inline def seq(inline b: String): Scip[Boolean]      = seq(b.getBytes(StandardCharsets.UTF_8))
+  inline def seq(b: Array[Byte]): Scip[Boolean] = Scip { scx.contains(b) && { scx.index += b.length; true } }
+  inline def alt(inline b: String): Scip[Boolean]      = alt(b.getBytes(StandardCharsets.UTF_8))
   inline def alt(b: Array[Byte]): Scip[Boolean] = Scip {
     scx.available(1) && {
       val cur = scx.peek
