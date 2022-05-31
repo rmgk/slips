@@ -1,13 +1,15 @@
+package de.rmgk
+
 object Datalog {
   case class Rule(head: Atom, body: List[Atom]) {
     override def toString: String = {
       val bodys = if (body.nonEmpty) s" :- ${body.mkString(", ")}"
-                  else ""
+      else ""
       s"$head$bodys."
     }
   }
   case class Atom(name: String, terms: List[Term]) {
-    def :-(body: Atom*): Rule = Rule(this, body.toList)
+    def :-(body: Atom*): Rule     = Rule(this, body.toList)
     override def toString: String = s"$name(${terms.mkString(", ")})"
   }
   sealed trait Term
@@ -18,10 +20,9 @@ object Datalog {
     override def toString: String = value
   }
 
-  type Substitution = Map[Term, Term]
+  type Substitution  = Map[Term, Term]
   type KnowledgeBase = Set[Atom]
-  type Program = List[Rule]
-
+  type Program       = List[Rule]
 
   case class AtomBuilder(s: String) {
     def apply(terms: Term*) = Atom(s, terms.toList)
@@ -30,8 +31,8 @@ object Datalog {
     def atom = AtomBuilder(s)
   }
   implicit def varSymbol(symbol: Symbol): Var = Var(symbol)
-  implicit def stringSym(value: String): Sym = Sym(value)
-  implicit def atomRule(atom: Atom): Rule = atom :- ()
+  implicit def stringSym(value: String): Sym  = Sym(value)
+  implicit def atomRule(atom: Atom): Rule     = atom.:-()
 
   val emptySubstitution: Substitution = Map()
 
@@ -56,8 +57,8 @@ object Datalog {
               case Some(v) => if (v != sr) None else Some(partialSubst)
               case None    => Some(partialSubst.updated(vl, sr))
             }
-          } yield {res}
-        case (_, (vr: Var) :: _)                => sys.error("Second term assumed to be ground.")
+          } yield { res }
+        case (_, (vr: Var) :: _) => sys.error("Second term assumed to be ground.")
       }
 
       rec(left.terms, right.terms)
@@ -65,9 +66,9 @@ object Datalog {
   }
 
   def evalAtom(knowledgeBase: KnowledgeBase)(
-    atom: Atom,
-    substitutions: List[Substitution])
-  : List[Substitution] = {
+      atom: Atom,
+      substitutions: List[Substitution]
+  ): List[Substitution] = {
     for {
       substitution <- substitutions
       downToEarthAtom = substitute(atom, substitution)
@@ -87,7 +88,7 @@ object Datalog {
     knowledgeBase ++ program.flatMap(evalRule(knowledgeBase, _))
   }
 
-  def vars(atom: Atom): Set[Var] = atom.terms.collect{case v: Var => v}.toSet
+  def vars(atom: Atom): Set[Var] = atom.terms.collect { case v: Var => v }.toSet
 
   def isRangeRestricted(rule: Rule): Boolean = {
     vars(rule.head).subsetOf(rule.body.flatMap(vars).toSet)
@@ -99,22 +100,20 @@ object Datalog {
       if (nextKb == knowledgeBase) knowledgeBase
       else step(nextKb)
     }
-    if (program.forall(isRangeRestricted))   step(Set())
+    if (program.forall(isRangeRestricted)) step(Set())
     else sys.error("Input program must be range restricted")
   }
 
-
-  val edge = "edge".atom
+  val edge  = "edge".atom
   val query = "query".atom
 
-
   def main(args: Array[String]): Unit = {
-    scribe.info(("query".atom('X) :- (edge("a", 'X), edge('X, "c"))).toString())
-    scribe.info {
+    println(("query".atom(Symbol("X")) :- (edge("a", Symbol("X")), edge(Symbol("X"), "c"))).toString())
+    println {
       solve(List[Rule](
         edge("a", "b"),
         edge("b", "c"),
-        query('X) :- (edge("a", 'X), edge('X, "c"))
+        query(Symbol("X")) :- (edge("a", Symbol("X")), edge(Symbol("X"), "c"))
       )).toString
     }
   }
