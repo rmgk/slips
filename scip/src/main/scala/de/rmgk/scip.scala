@@ -114,9 +114,6 @@ object scip {
 
   inline def scx(using inline scx0: Scx): scx0.type = scx0
 
-  // for reasons beyond me, this seems to help
-  inline private def funApply[A, B](inline f: A => B, inline arg: A): B = f(arg)
-
   extension [A](inline scip: Scip[A]) {
     inline def run(using inline scx: Scx): A               = ${ MacroImpls.applyInBlock('scip, 'scx) }
     inline def <~[B](inline other: Scip[B]): Scip[A]       = Scip { { val a = scip.run; other.run; a } }
