@@ -130,6 +130,7 @@ object scip {
           scx.index = start
           other.run
     }
+    inline def opt: Scip[Option[A]] = scip.map(Some.apply) | Scip { None }
 
     inline def map[B](inline f: A => B): Scip[B]           = Scip { f(scip.run) }
     inline def flatMap[B](inline f: A => Scip[B]): Scip[B] = Scip { f(scip.run).run }
@@ -176,8 +177,6 @@ object scip {
       val res = scip.run
       if f(res) then res else scx.fail
     }
-
-    inline def opt: Scip[Option[A]] = scip.map(Some.apply) | Scip { None }
 
     inline def list(inline sep: Scip[Boolean]): Scip[List[A]] = Scip {
       val acc         = ListBuffer.empty[A]
@@ -236,6 +235,7 @@ object scip {
       while scip.run do matches += 1
       matches
     }
+    inline def opt: Scip[true]                                = Scip { scip.run; true }
     inline def or(inline other: Scip[Boolean]): Scip[Boolean] = Scip { scip.run || other.run }
     inline def and(inline other: Scip[Boolean]): Scip[Boolean] = Scip {
       val start = scx.index
@@ -261,7 +261,7 @@ object scip {
     }
   }
 
-  inline def scipend: Scip[Boolean] = Scip { scx.index >= scx.maxpos }
+  inline def end: Scip[Boolean] = Scip { scx.index >= scx.maxpos }
 
   inline def bpred(inline p: Byte => Boolean): Scip[Boolean] = Scip { scx.containsNext(p) }
   inline def cpred(inline p: Int => Boolean): Scip[Boolean] = Scip {
