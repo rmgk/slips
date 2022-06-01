@@ -135,13 +135,13 @@ object scip {
     inline def flatMap[B](inline f: A => Scip[B]): Scip[B] = Scip { f(scip.run).run }
     inline def withFilter(inline p: A => Boolean): Scip[A] = scip.require(p)
 
-    inline def capture: Scip[(Int, Int)] = Scip {
+    inline def region: Scip[(Int, Int)] = Scip {
       val start = scx.index
       scip.run
       (start, scx.index)
     }
 
-    inline def length: Scip[Int] = Scip {
+    inline def byteCount: Scip[Int] = Scip {
       val start = scx.index
       scip.run
       scx.index - start
