@@ -16,28 +16,28 @@ lazy val logging = crossProject(JSPlatform, JVMPlatform)
     libraryDependencies += sourcecode.value,
   )
 
-lazy val chain = crossProject(JSPlatform, JVMPlatform)
+lazy val chain = crossProject(JSPlatform, JVMPlatform, NativePlatform)
   .crossType(CrossType.Pure)
   .in(file("chain")).settings(
     name := "chain",
     commonSettings,
   )
 
-lazy val category = crossProject(JSPlatform, JVMPlatform)
+lazy val category = crossProject(JSPlatform, JVMPlatform, NativePlatform)
   .crossType(CrossType.Pure)
   .in(file("category")).settings(
     name := "category",
     commonSettings,
   )
 
-lazy val scip = crossProject(JSPlatform, JVMPlatform)
+lazy val scip = crossProject(JSPlatform, JVMPlatform, NativePlatform)
   .crossType(CrossType.Pure)
   .in(file("scip")).settings(
     name := "scip",
     commonSettings,
   )
 
-lazy val datalog = crossProject(JSPlatform, JVMPlatform)
+lazy val datalog = crossProject(JSPlatform, JVMPlatform, NativePlatform)
   .crossType(CrossType.Pure)
   .in(file("datalog")).settings(
     name := "datalog",
