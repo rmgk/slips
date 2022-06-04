@@ -116,8 +116,8 @@ object scip {
 
   extension [A](inline scip: Scip[A]) {
     inline def run(using inline scx: Scx): A               = ${ MacroImpls.applyInBlock('scip, 'scx) }
-    inline def <~[B](inline other: Scip[B]): Scip[A]       = Scip { { val a = scip.run; other.run; a } }
-    inline def ~>[B](inline other: Scip[B]): Scip[B]       = Scip { { scip.run; other.run } }
+    inline def <~[B](inline other: Scip[B]): Scip[A]       = Scip { val a = scip.run; other.run; a }
+    inline def ~>[B](inline other: Scip[B]): Scip[B]       = Scip { scip.run; other.run }
     inline def <~>[B](inline other: Scip[B]): Scip[(A, B)] = Scip { (scip.run, other.run) }
     inline def |[B >: A](inline other: Scip[B]): Scip[B] = Scip {
       val start = scx.index
