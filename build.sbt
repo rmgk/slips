@@ -34,3 +34,9 @@ lazy val datalog = crossProject(JSPlatform, JVMPlatform, NativePlatform)
     commonSettings,
     noPublish
   )
+
+lazy val direct = crossProject(JSPlatform, JVMPlatform, NativePlatform)
+  .crossType(CrossType.Pure).settings(
+    commonSettings,
+    noPublish
+  )
