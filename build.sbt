@@ -45,8 +45,8 @@ val webview =
   project.settings(
     commonSettings,
     noPublish,
-    nativeMode      := "release-fast",
-    nativeLTO       := "thin",
+    nativeMode      := "debug", //debug release-fast release-full
+    nativeLTO       := "none", // none full thin (thin recommended over full)
     nativeLinkStubs := true,
     nativeCompileOptions ++= fromCommand("pkg-config", "--cflags", "gtk+-3.0", "webkit2gtk-4.0"),
     nativeLinkingOptions ++= fromCommand("pkg-config", "--libs", "gtk+-3.0", "webkit2gtk-4.0")
