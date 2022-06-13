@@ -8,39 +8,29 @@ val commonSettings = Def.settings(
 )
 
 lazy val logging = crossProject(JSPlatform, JVMPlatform)
-  .crossType(CrossType.Pure)
-  .in(file("logging")).settings(
-    name := "logging",
+  .crossType(CrossType.Pure).settings(
     commonSettings,
     commonCrossBuildVersions,
     libraryDependencies += sourcecode.value,
   )
 
 lazy val chain = crossProject(JSPlatform, JVMPlatform, NativePlatform)
-  .crossType(CrossType.Pure)
-  .in(file("chain")).settings(
-    name := "chain",
+  .crossType(CrossType.Pure).settings(
     commonSettings,
   )
 
 lazy val category = crossProject(JSPlatform, JVMPlatform, NativePlatform)
-  .crossType(CrossType.Pure)
-  .in(file("category")).settings(
-    name := "category",
+  .crossType(CrossType.Pure).settings(
     commonSettings,
   )
 
 lazy val scip = crossProject(JSPlatform, JVMPlatform, NativePlatform)
-  .crossType(CrossType.Pure)
-  .in(file("scip")).settings(
-    name := "scip",
+  .crossType(CrossType.Pure).settings(
     commonSettings,
   )
 
 lazy val datalog = crossProject(JSPlatform, JVMPlatform, NativePlatform)
-  .crossType(CrossType.Pure)
-  .in(file("datalog")).settings(
-    name := "datalog",
+  .crossType(CrossType.Pure).settings(
     commonSettings,
     noPublish
   )
