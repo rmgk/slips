@@ -106,7 +106,7 @@ object scip {
     *   - parsing failure throws a control exception
     *   - anyone catching the exception is responsible of resetting the parsing input to before the failed attempt
     */
-  class Scip[+A](val run0: Scx => A)
+  type Scip[+A] = de.rmgk.dio.Dio[Scx, A]
 
   object Scip {
     inline def apply[A](inline run: Scx ?=> A) = new Scip(run(using _))
@@ -115,7 +115,6 @@ object scip {
   inline def scx(using inline scx0: Scx): scx0.type = scx0
 
   extension [A](inline scip: Scip[A]) {
-    inline def run(using inline scx: Scx): A               = ${ MacroImpls.applyInBlock('scip, 'scx) }
     inline def <~[B](inline other: Scip[B]): Scip[A]       = Scip { val a = scip.run; other.run; a }
     inline def ~>[B](inline other: Scip[B]): Scip[B]       = Scip { scip.run; other.run }
     inline def <~>[B](inline other: Scip[B]): Scip[(A, B)] = Scip { (scip.run, other.run) }
@@ -128,10 +127,6 @@ object scip {
           other.run
     }
     inline def opt: Scip[Option[A]] = scip.map(Some.apply) | Scip { None }
-
-    inline def map[B](inline f: A => B): Scip[B]           = Scip { f(scip.run) }
-    inline def flatMap[B](inline f: A => Scip[B]): Scip[B] = Scip { f(scip.run).run }
-    inline def withFilter(inline p: A => Boolean): Scip[A] = scip.require(p)
 
     inline def region: Scip[(Int, Int)] = Scip {
       val start = scx.index
@@ -170,6 +165,7 @@ object scip {
           scx.index = start
           false
     }
+    inline def withFilter(inline p: A => Boolean): Scip[A] = scip.require(p)
     inline def require(inline f: A => Boolean): Scip[A] = Scip {
       val res = scip.run
       if f(res) then res else scx.fail
@@ -384,33 +380,6 @@ object scip {
         }
       }
     }
-
-    def applyInBlock[B: Type](scip: Expr[Scip[B]], scx: Expr[Scx])(using quotes: Quotes): Expr[B] = {
-      import quotes.reflect.*
-      val maybeBlock = cleanBlock(scip.asTerm)
-      val fixed = maybeBlock match {
-        case Block(stmts, expr) => expr.asExpr match {
-            case '{ new Scip[B]($scxfun) } =>
-              Some(cleanBlock(Block(stmts, Expr.betaReduce('{ $scxfun.apply($scx) }).asTerm)).asExprOf[B])
-            case other => None
-          }
-        case other => None
-      }
-      Expr.betaReduce(fixed.getOrElse('{ $scip.run0($scx) }))
-    }
-
-    def cleanBlock[A](using quotes: Quotes)(expr: quotes.reflect.Term): quotes.reflect.Term = {
-      import quotes.reflect.*
-      expr match
-        case Inlined(_, _, t)                                 => cleanBlock(t)
-        case Match(_, List(CaseDef(Wildcard(), None, inner))) => cleanBlock(inner)
-        case Block(statements, expr) => cleanBlock(expr) match
-            case Block(innerstmts, expr) => Block(statements ::: innerstmts, expr)
-            case expr                    => Block(statements, expr)
-        case Typed(expr, tt) => cleanBlock(expr)
-        case other           => other
-    }
-
   }
 
 }

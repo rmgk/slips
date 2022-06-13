@@ -24,7 +24,7 @@ class SimpleTest extends munit.FunSuite {
     assertEquals(scx.index, scx.input.length)
     assertEquals(res, input)
 
-    val res2 = (seq("some stuff") and seq("[")).str.run0(Scx("some stuff[ eh"))
+    val res2 = (seq("some stuff") and seq("[")).str.runInContext(Scx("some stuff[ eh"))
     assertEquals(res2, "some stuff[")
 
   }
@@ -100,17 +100,17 @@ class SimpleTest extends munit.FunSuite {
 
     inline def p = "abc".any.rep
 
-    val res = p.run0(Scx("abcaaabc"))
+    val res = p.runInContext(Scx("abcaaabc"))
     assertEquals(res, 8)
   }
 
   test("until") {
     val ut = until("abc".any).min(1).rep.min(1).str
 
-    val res = ut.run0(Scx("eeeeeeebee"))
+    val res = ut.runInContext(Scx("eeeeeeebee"))
     assertEquals(res, "eeeeeee")
 
-    val res2 = until(seq("]")).min(0).str.run0(Scx("test] meh"))
+    val res2 = until(seq("]")).min(0).str.runInContext(Scx("test] meh"))
     assertEquals(res2, "test")
 
   }
@@ -122,7 +122,7 @@ class SimpleTest extends munit.FunSuite {
       val cs   = "c".all.rep.min(3).str
       val choi = (as | bs | cs)
 
-      val res = choi.run0(Scx("bbaccc"))
+      val res = choi.runInContext(Scx("bbaccc"))
       assertEquals(res, "bb")
     catch case e: ScipEx => throw IllegalStateException(e.getMessage)
   }

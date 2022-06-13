@@ -24,11 +24,6 @@ val category = crossProject(JSPlatform, JVMPlatform, NativePlatform)
     commonSettings,
   )
 
-val scip = crossProject(JSPlatform, JVMPlatform, NativePlatform)
-  .crossType(CrossType.Pure).settings(
-    commonSettings,
-  )
-
 val datalog = crossProject(JSPlatform, JVMPlatform, NativePlatform)
   .crossType(CrossType.Pure).settings(
     commonSettings,
@@ -41,12 +36,23 @@ val direct = crossProject(JSPlatform, JVMPlatform, NativePlatform)
     noPublish
   )
 
+val dio = crossProject(JSPlatform, JVMPlatform, NativePlatform)
+  .crossType(CrossType.Pure).settings(
+    commonSettings,
+  )
+
+val scip = crossProject(JSPlatform, JVMPlatform, NativePlatform)
+  .crossType(CrossType.Pure).settings(
+    commonSettings,
+  )
+  .dependsOn(dio)
+
 val webview =
   project.settings(
     commonSettings,
     noPublish,
-    nativeMode      := "debug", //debug release-fast release-full
-    nativeLTO       := "none", // none full thin (thin recommended over full)
+    nativeMode      := "debug", // debug release-fast release-full
+    nativeLTO       := "none",  // none full thin (thin recommended over full)
     nativeLinkStubs := true,
     nativeCompileOptions ++= fromCommand("pkg-config", "--cflags", "gtk+-3.0", "webkit2gtk-4.0"),
     nativeLinkingOptions ++= fromCommand("pkg-config", "--libs", "gtk+-3.0", "webkit2gtk-4.0")

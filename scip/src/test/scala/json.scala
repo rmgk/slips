@@ -106,7 +106,7 @@ class JsonTest extends munit.FunSuite {
     import Json.Js.*
 
     assertEquals(
-      Json.jsonExpr.run0(Scx(mystr).copy(tracing = false)),
+      Json.jsonExpr.runInContext(Scx(mystr).copy(tracing = false)),
       Obj(
         ("firstName", Str("John")),
         ("lastName", Str("Smith")),

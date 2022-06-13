@@ -14,8 +14,9 @@ object IO:
 @main
 def run() =
   val res: IO[Int] = dio {
-    val a = IO(5).await
-    a + 1
+    //val a = IO(5).await
+    //a + 1
+    2
   }
   println("runs first")
   println(res.run())
