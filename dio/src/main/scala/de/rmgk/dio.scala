@@ -6,7 +6,7 @@ object dio {
   class Dio[Ctx, +A](val runInContext: Ctx => A)
 
   object Dio {
-    inline def apply[Ctx, A](inline run: Ctx ?=> A) = new Dio(run(using _))
+    inline def apply[Ctx, A](inline run: Ctx ?=> A): Dio[Ctx, A] = new Dio(run(using _))
   }
 
   extension [Ctx, A](inline dio: Dio[Ctx, A]) {
