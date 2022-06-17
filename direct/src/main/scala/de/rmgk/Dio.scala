@@ -13,10 +13,12 @@ object IO:
 
 @main
 def run() =
-  val res: IO[Int] = dio {
-    //val a = IO(5).await
-    //a + 1
-    2
+  val res: IO[Int] = Async {
+    val a = IO(5).await
+    IO{println("just for show")}.await
+    val b = IO{println("runs later"); 2}.await
+    val c = a + b
+    c
   }
   println("runs first")
   println(res.run())
