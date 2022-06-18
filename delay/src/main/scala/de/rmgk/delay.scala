@@ -1,58 +1,64 @@
 package de.rmgk
 
 import scala.annotation.compileTimeOnly
-import scala.concurrent.Future
+import scala.concurrent.{ExecutionContext, Future}
 import scala.quoted.{Expr, Quotes, Type}
-import scala.util.Try
+import scala.util.{Random, Try}
 
 object delay {
-  class Sync[Ctx, +A](val runInContext: Ctx => A) extends Async[Ctx, A](ctx =>
-        cb => cb(Right(runInContext(ctx)))
-      )
+  class Sync[-Ctx, +A](val runInContext: Ctx => A) extends Async[Ctx, A](ctx => cb => cb(Right(runInContext(ctx))))
 
-  object Sync {
-    inline def apply[Ctx, A](inline run: Ctx ?=> A): Sync[Ctx, A] = new Sync(run(using _))
-  }
+  class SyncCompanion[Ctx]:
+    inline def apply[A](inline run: Ctx ?=> A): Sync[Ctx, A] = new Sync(run(using _))
+  inline def Sync[Ctx]: SyncCompanion[Ctx] = new SyncCompanion[Ctx] {}
 
   extension [Ctx, A](inline sync: Sync[Ctx, A]) {
-    inline def run(using inline ctx: Ctx): A                         = ${ MacroImpls.applyInBlock[Ctx, A]('sync, 'ctx) }
-    inline def map[B](inline f: A => B): Sync[Ctx, B]                = Sync { f(sync.run) }
+    inline def run(using inline ctx: Ctx): A          = ${ DelayMacros.applyInBlock[Ctx, A]('sync, 'ctx) }
+    inline def map[B](inline f: A => B): Sync[Ctx, B] = Sync { f(sync.run) }
     inline def flatMap[B](inline f: A => Sync[Ctx, B]): Sync[Ctx, B] = Sync { f(sync.run).run }
   }
 
   type CB[-A] = Either[Throwable, A] => Unit
 
-  class Async[Ctx, +A](val handleInCtx: Ctx => CB[A] => Unit) {
+  class Async[-Ctx, +A](val handleInCtx: Ctx => CB[A] => Unit) {
     @compileTimeOnly("await can only be called inside macro")
     def await: A = ???
   }
 
   extension [Ctx, A](inline async: Async[Ctx, A]) {
     inline def run(inline cb: CB[A])(using inline ctx: Ctx): Unit =
-      ${ MacroImpls.handleInBlock[Ctx, A]('async, 'ctx, 'cb) }
+      ${ DelayMacros.handleInBlock[Ctx, A]('async, 'ctx, 'cb) }
     inline def flatMap[B](inline f: A => Async[Ctx, B]): Async[Ctx, B] =
-      Async.fromCallback[Ctx, B] { cb =>
+      Async[Ctx].fromCallback[B] { cb =>
         async.run {
           case Right(a) =>
-            try f(a).run(cb)
+            try delay.run[Ctx, B](f(a))(cb)
             catch case scala.util.control.NonFatal(e) => cb(Left(e))
           case Left(err) => cb(Left(err))
         }
       }
   }
 
-  object Async {
-    inline def fromCallback[Ctx, A](inline f: Ctx ?=> CB[A] => Unit): Async[Ctx, A] =
+  trait AsyncCompanion[Ctx] {
+    inline def fromCallback[A](inline f: Ctx ?=> CB[A] => Unit): Async[Ctx, A] =
       new Async(ctx => cb => f(using ctx)(cb))
 
-    inline def apply[Ctx, A](inline expr: Ctx ?=> A): Async[Ctx, A] =
+    inline def fromFuture[A](inline fut: Future[A])(using inline ec: ExecutionContext): Async[Ctx, A] =
+      Async.fromCallback { cb =>
+        fut.onComplete(t => cb(t.toEither))
+      }
+
+    inline def apply[A](inline expr: Ctx ?=> A): Async[Ctx, A] =
       new Async[Ctx, A](ctx => cb => syntax(expr(using ctx)).run(cb)(using ctx))
 
-    inline def syntax[Ctx, A](inline expr: A): Async[Ctx, A] =
-      ${ MacroImpls.asyncImpl('{ expr }) }
+    inline def syntax[A](inline expr: A): Async[Ctx, A] =
+      ${ DelayMacros.asyncImpl[Ctx, A]('{ expr }) }
   }
+  inline def Async[Ctx]: AsyncCompanion[Ctx] = new AsyncCompanion[Ctx] {}
 
-  object MacroImpls {
+  extension [A](inline fut: Future[A])(using ExecutionContext) inline def await: A = Async.fromFuture(fut).await
+
+  object DelayMacros {
     def applyInBlock[Ctx: Type, B: Type](
         dio: Expr[Sync[Ctx, B]],
         ctx: Expr[Ctx]
@@ -61,8 +67,12 @@ object delay {
       val maybeBlock = cleanBlock(dio.asTerm)
       val fixed = maybeBlock match {
         case Block(stmts, expr) => expr.asExpr match {
-            case '{ new Sync[Ctx, B]($scxfun) } =>
-              Some(cleanBlock(Block(stmts, Expr.betaReduce('{ $scxfun.apply($ctx) }).asTerm)).asExprOf[B])
+            case '{ new Sync[α, B]($scxfun) } =>
+              if !(TypeRepr.of[Ctx] <:< TypeRepr.of[α]) then
+                report.errorAndAbort(s"»${Type.show[Ctx]}« is not a subtype of »${Type.show[α]}«", expr.asExpr)
+              Some(
+                cleanBlock(Block(stmts, Expr.betaReduce('{ $scxfun.apply($ctx.asInstanceOf[α]) }).asTerm)).asExprOf[B]
+              )
             case other => None
           }
         case other => None
@@ -108,38 +118,50 @@ object delay {
         case other             => Block(Nil, other)
     }
 
+    object CleanBlock {
+      def unapply(using quotes: Quotes)(expr: quotes.reflect.Term): Some[quotes.reflect.Term] = {
+        Some(cleanBlock(expr))
+      }
+    }
+
     def asyncImpl[Ctx: Type, T: Type](expr: Expr[T])(using quotes: Quotes): Expr[Async[Ctx, T]] = {
       import quotes.reflect.*
 
       cleanBlock(expr.asTerm) match {
         case block @ Block(statements: List[Statement], expr) =>
           val Block(List(stmt), init) = ValDef.let(Symbol.spliceOwner, "res", expr) { ref =>
-            '{ Sync.apply[Ctx, T] { ${ ref.asExprOf[T] } } }.asTerm
+            '{ Sync[Ctx][T] { ${ ref.asExprOf[T] } } }.asTerm
           }
           (statements :+ stmt).foldRight[Term](init) { (s, acc) =>
             s match {
-              case vd @ ValDef(name, typeTree, Some(Select(io, "await"))) =>
+              case vd @ ValDef(name, typeTree, Some(CleanBlock(Block(stmts, Select(io, "await"))))) =>
                 typeTree.tpe.asType match {
                   case '[α] =>
                     '{
-                      ${ io.asExprOf[Async[Ctx, α]] }.flatMap[α] { (v: α) =>
-                        ${
-                          Block(
-                            List(ValDef.copy(vd)(name, typeTree, Some('{ v }.asTerm))),
-                            acc
-                          ).asExprOf[Async[Ctx, α]]
-                        }
+                      ${ (if stmts.isEmpty then io else Block(stmts, io)).asExprOf[Async[Ctx, α]] }.flatMap[T] {
+                        (v: α) =>
+                          ${
+                            Block(
+                              List(ValDef.copy(vd)(name, typeTree, Some('{ v }.asTerm))),
+                              acc
+                            ).asExprOf[Async[Ctx, T]]
+                          }
                       }
                     }.asTerm
                 }
-
-              case Select(io, "await") =>
-                '{ ${ io.asExprOf[Async[Ctx, _]] }.flatMap[T] { (_: Any) => ${ acc.asExprOf[Async[Ctx, T]] } } }.asTerm
-              case _ => Block(List(s), acc)
+              case CleanBlock(Block(stmts, Select(io, "await"))) =>
+                '{
+                  ${ (if stmts.isEmpty then io else Block(stmts, io)).asExprOf[Async[Ctx, Any]] }.flatMap[T] {
+                    (_: Any) =>
+                      ${ acc.asExprOf[Async[Ctx, T]] }
+                  }
+                }.asTerm
+              case _ =>
+                Block(List(s), acc)
             }
           }.asExprOf[Async[Ctx, T]]
         case other =>
-          '{ Sync.apply[Ctx, T]($expr) }
+          '{ Sync[Ctx][T]($expr) }
       }
     }
   }
