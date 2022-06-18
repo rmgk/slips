@@ -129,7 +129,7 @@ object delay {
 
       cleanBlock(expr.asTerm) match {
         case block @ Block(statements: List[Statement], expr) =>
-          val Block(List(stmt), init) = ValDef.let(Symbol.spliceOwner, "res", expr) { ref =>
+          val Block(List(stmt), init) = ValDef.let(Symbol.spliceOwner, "async$macro$result", expr) { ref =>
             '{ Sync[Ctx][T] { ${ ref.asExprOf[T] } } }.asTerm
           }
           (statements :+ stmt).foldRight[Term](init) { (s, acc) =>

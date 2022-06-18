@@ -1,10 +1,8 @@
-package de.rmgk
-
 import de.rmgk.delay.*
 
-import scala.concurrent.{ExecutionContext, Future}
+import scala.concurrent.ExecutionContext.global
+import scala.concurrent.Future
 import scala.util.Random
-import concurrent.ExecutionContext.global
 
 @main
 def run() =
@@ -13,17 +11,12 @@ def run() =
       println(s"running future")
       Random.nextInt()
     }.await
-    def of = Future{
-      println(s"in another future, a was $a")
-    }
-    of.await
+    def of = Future { println(s"in another future, a was $a") }
     Sync { println("just for show") }.run
+    of.await
     val b = Sync { println("runs later"); math.pow(2, 10) }.run
-    val g = Future{ a % b }.await
-    g
+    Future { a % b }.await
   }
 
-  println(printCode(res2))
-
   println("runs first")
-  println(res2.run(println)(using global))
+  res2.run(println)(using global)
