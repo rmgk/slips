@@ -63,13 +63,9 @@ object delay {
         case Block(stmts, expr) => expr.asExpr match {
             case '{ new Sync[Ctx, B]($scxfun) } =>
               Some(cleanBlock(Block(stmts, Expr.betaReduce('{ $scxfun.apply($ctx) }).asTerm)).asExprOf[B])
-            case other =>
-              val s = other.show
-              if (s.contains("new")) println(s"why: $s")
-              None
+            case other => None
           }
-        case other =>
-          None
+        case other => None
       }
       Expr.betaReduce(fixed.getOrElse('{ $dio.runInContext($ctx) }))
     }
@@ -107,8 +103,9 @@ object delay {
         case Block(statements, expr) => cleanBlock(expr) match
             case Block(innerstmts, expr) => Block(statements ::: innerstmts, expr)
             case expr                    => Block(statements, expr)
-        case Typed(expr, tt) => cleanBlock(expr)
-        case other           => Block(Nil, other)
+        case Typed(expr, tt)   => cleanBlock(expr)
+        case NamedArg(_, expr) => cleanBlock(expr)
+        case other             => Block(Nil, other)
     }
 
     def asyncImpl[Ctx: Type, T: Type](expr: Expr[T])(using quotes: Quotes): Expr[Async[Ctx, T]] = {
