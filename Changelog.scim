@@ -5,12 +5,11 @@
 • Scip:
 	• Fancy optimization macros
 	• Support for unicode .any
-• Direct:
+• Delay:
 	• experiment with macros for direct style monads
+	• extract IO monad part of Scip into own project
 • Webview:
 	• add webview experiments based on :link{https://github.com/rmgk/slips/tree/master/webview/src/main}
-• Dio:
-	• extract IO monad part of Scip into own project
 
 == v0.4.3
 
