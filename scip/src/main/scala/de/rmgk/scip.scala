@@ -106,10 +106,10 @@ object scip {
     *   - parsing failure throws a control exception
     *   - anyone catching the exception is responsible of resetting the parsing input to before the failed attempt
     */
-  type Scip[+A] = de.rmgk.dio.Dio[Scx, A]
+  type Scip[+A] = de.rmgk.delay.Sync[Scx, A]
 
   object Scip {
-    inline def apply[A](inline run: Scx ?=> A) = new Scip(run(using _))
+    inline def apply[A](inline run: Scx ?=> A): Scip[A] = new de.rmgk.delay.Sync(run(using _))
   }
 
   inline def scx(using inline scx0: Scx): scx0.type = scx0

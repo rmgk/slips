@@ -30,22 +30,17 @@ val datalog = crossProject(JSPlatform, JVMPlatform, NativePlatform)
     noPublish
   )
 
-val direct = crossProject(JSPlatform, JVMPlatform, NativePlatform)
+val delay = crossProject(JSPlatform, JVMPlatform, NativePlatform)
   .crossType(CrossType.Pure).settings(
     commonSettings,
     noPublish
-  )
-
-val dio = crossProject(JSPlatform, JVMPlatform, NativePlatform)
-  .crossType(CrossType.Pure).settings(
-    commonSettings,
   )
 
 val scip = crossProject(JSPlatform, JVMPlatform, NativePlatform)
   .crossType(CrossType.Pure).settings(
     commonSettings,
   )
-  .dependsOn(dio)
+  .dependsOn(delay)
 
 val webview =
   project.settings(

@@ -81,9 +81,9 @@ class SimpleTest extends munit.FunSuite {
 
   test("flatmap") {
 
-    val ap = "a".all.str
-    val bp = "b".all.str
-    val cp = "c".all.str
+    inline def ap = "a".all.str
+    inline def bp = "b".all.str
+    inline def cp = "c".all.str
 
     inline def parse =
       for
@@ -91,6 +91,7 @@ class SimpleTest extends munit.FunSuite {
         b <- bp
         c <- cp
       yield (a, b, c)
+
 
     val res = parse.run(using Scx("abc"))
     assertEquals(res, ("a", "b", "c"))
