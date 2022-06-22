@@ -10,19 +10,20 @@ import scala.collection.IterableOps
 trait Associative[A] {
   def combine(left: A, right: A): A
 
-  extension (left: A) def combined(right: A): A = combine(left, right)
+
+  extension (left: A) @targetName("combineExt") def combine(right: A): A = this.combine(left, right)
 }
 
 object Associative {
-  def combine[A: Associative](left: A, right: A): A = left combined right
+  def combine[A: Associative](left: A, right: A): A = left combine right
 
   given mapAssoc[K, V: Associative]: Associative[Map[K, V]] = (left, right) =>
     right.foldLeft(left) { case (acc, (k, r)) =>
-      acc.updatedWith(k) { l => l combined Some(r) }
+      acc.updatedWith(k) { l => l combine Some(r) }
     }
 
   given optionAssoc[V: Associative]: Associative[Option[V]] =
-    case (Some(l), Some(r)) => Some(l combined r)
+    case (Some(l), Some(r)) => Some(l combine r)
     case (None, r)          => r
     case (l, _)             => l
 
