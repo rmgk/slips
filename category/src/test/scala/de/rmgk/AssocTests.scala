@@ -5,7 +5,6 @@ import org.scalacheck.*
 import org.scalacheck.Prop.*
 
 class AssocTests extends munit.FunSuite {
-
   val text  = """Eins zwei zwei drei drei drei"""
   val words = text.split("\\W+").map(_.toLowerCase)
 
@@ -28,16 +27,17 @@ class AssocTests extends munit.FunSuite {
   }
 }
 
-class ListAssoc extends LatticeMergeTest[List[Int]]
-class SetAssoc extends LatticeMergeTest[Set[Long]]
-class MapAssoc extends LatticeMergeTest[Map[Int, String]]
+class ListAssoc   extends LatticeMergeTest[List[Int]]
+class SetAssoc    extends LatticeMergeTest[Set[Long]]
+class MapAssoc    extends LatticeMergeTest[Map[Int, String]]
 class NestedAssoc extends LatticeMergeTest[List[Set[Int]]]
 
 abstract class LatticeMergeTest[A: Arbitrary: Associative] extends munit.ScalaCheckSuite {
 
   property("associative") {
     forAll { (a: A, b: A, c: A) =>
-      val ab   = Associative.combine(a, b)
+      val ab = Associative.combine(a, b)
+      a combine b
       val bc   = Associative.combine(b, c)
       val abc  = Associative.combine(ab, c)
       val abc2 = Associative.combine(a, bc)

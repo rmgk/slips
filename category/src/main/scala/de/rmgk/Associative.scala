@@ -1,15 +1,15 @@
 package de.rmgk
 
 import scala.annotation.targetName
+import scala.collection.IterableOps
 import scala.compiletime.summonAll
 import scala.deriving.Mirror
+
 import math.Numeric.Implicits.infixNumericOps
-import scala.collection.IterableOps
 
 /** A Semigroup */
 trait Associative[A] {
   def combine(left: A, right: A): A
-
 
   extension (left: A) @targetName("combineExt") def combine(right: A): A = this.combine(left, right)
 }
