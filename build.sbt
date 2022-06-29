@@ -32,8 +32,7 @@ val datalog = crossProject(JSPlatform, JVMPlatform, NativePlatform)
 
 val delay = crossProject(JSPlatform, JVMPlatform, NativePlatform)
   .crossType(CrossType.Pure).settings(
-    commonSettings,
-    noPublish
+    commonSettings
   )
 
 val scip = crossProject(JSPlatform, JVMPlatform, NativePlatform)
