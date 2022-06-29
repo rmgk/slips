@@ -4,6 +4,7 @@ import scala.annotation.compileTimeOnly
 import scala.concurrent.{ExecutionContext, Future}
 import scala.quoted.{Expr, Quotes, Type}
 import scala.util.{Random, Try}
+import scala.util.control.NonFatal
 
 object delay {
   class Sync[-Ctx, +A](val runInContext: Ctx => A) extends Async[Ctx, A](ctx => cb => cb(Right(runInContext(ctx))))
@@ -28,6 +29,11 @@ object delay {
   extension [Ctx, A](inline async: Async[Ctx, A]) {
     inline def run(inline cb: CB[A])(using inline ctx: Ctx): Unit =
       ${ DelayMacros.handleInBlock[Ctx, A]('async, 'ctx, 'cb) }
+    inline def map[B](inline f: A => B): Async[Ctx, B] =
+      Async[Ctx] {
+        val value = async.await
+        f(value)
+      }
     inline def flatMap[B](inline f: A => Async[Ctx, B]): Async[Ctx, B] =
       Async[Ctx].fromCallback[B] { cb =>
         async.run {
@@ -37,6 +43,13 @@ object delay {
           case Left(err) => cb(Left(err))
         }
       }
+    inline def runToFuture(using Ctx): Future[A] =
+      val p = scala.concurrent.Promise[A]()
+      async.run {
+        case Left(e)  => p.failure(e)
+        case Right(v) => p.success(v)
+      }
+      p.future
   }
 
   trait AsyncCompanion[Ctx] {
@@ -49,7 +62,13 @@ object delay {
       }
 
     inline def apply[A](inline expr: Ctx ?=> A): Async[Ctx, A] =
-      new Async[Ctx, A](ctx => cb => syntax(expr(using ctx)).run(cb)(using ctx))
+      new Async[Ctx, A](ctx =>
+        cb => {
+          try syntax(expr(using ctx)).run(cb)(using ctx)
+          catch
+            case NonFatal(e) => cb(Left(e))
+        }
+      )
 
     inline def syntax[A](inline expr: A): Async[Ctx, A] =
       ${ DelayMacros.asyncImpl[Ctx, A]('{ expr }) }
