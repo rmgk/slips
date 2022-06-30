@@ -101,7 +101,7 @@ object delay {
       }
   }
 
-  extension [Ctx, T](inline cs: Ctx ?=> CompletionStage[T]) {
+  extension [Ctx, T](inline cs: CompletionStage[T]) {
     inline def toAsync: Async[Ctx, T] =
       Async.fromCallback {
         cs.handle { (res, ex) =>
