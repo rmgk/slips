@@ -1,5 +1,8 @@
 package de.rmgk
 
+import java.util.Objects
+import java.util.Objects.isNull
+import java.util.concurrent.CompletionStage
 import scala.annotation.compileTimeOnly
 import scala.concurrent.{ExecutionContext, Future}
 import scala.quoted.{Expr, Quotes, Type}
@@ -21,9 +24,10 @@ object delay {
 
   type Callback[-A] = Either[Throwable, A] => Unit
   extension [A](inline handler: Callback[A]) {
-    inline def complete(tr: Try[A]): Unit = handler(tr.toEither)
-    inline def succeed(value: A): Unit    = handler(Right(value))
-    inline def fail(ex: Throwable): Unit  = handler(Left(ex))
+    inline def complete(tr: Try[A]): Unit               = handler(tr.toEither)
+    inline def complete(tr: Either[Throwable, A]): Unit = handler(tr)
+    inline def succeed(value: A): Unit                  = handler(Right(value))
+    inline def fail(ex: Throwable): Unit                = handler(Left(ex))
   }
 
   class Async[-Ctx, +A](val handleInCtx: Ctx => Callback[A] => Unit) {
@@ -55,6 +59,20 @@ object delay {
         case Right(v) => p.success(v)
       }
       p.future
+
+    inline def runToAsync(using inline ctx: Ctx): Async[Ctx, A] =
+      val p = new Promise[A]
+      async.run(p)
+      p.async
+
+    inline def close(inline handler: Ctx ?=> Unit): Async[Ctx, A] =
+      new Async[Ctx, A](ctx =>
+        cb =>
+          async.run { res =>
+            handler(using ctx)
+            cb(res)
+          }(using ctx)
+      )
   }
 
   trait AsyncCompanion[Ctx] {
@@ -62,11 +80,6 @@ object delay {
       new Async(ctx => cb => f(using ctx)(using cb))
 
     inline def handler[A](using cb: Callback[A]): Callback[A] = cb
-
-    inline def fromFuture[A](inline fut: Future[A])(using inline ec: ExecutionContext): Async[Ctx, A] =
-      Async.fromCallback {
-        fut.onComplete(Async.handler.complete(_))
-      }
 
     inline def apply[A](inline expr: Ctx ?=> A): Async[Ctx, A] =
       new Async[Ctx, A](ctx =>
@@ -81,7 +94,45 @@ object delay {
   }
   inline def Async[Ctx]: AsyncCompanion[Ctx] = new AsyncCompanion[Ctx] {}
 
-  extension [A](inline fut: Future[A])(using ExecutionContext) inline def await: A = Async.fromFuture(fut).await
+  extension [A](inline fut: Future[A]) {
+    inline def toAsync(using inline ec: ExecutionContext): Async[Any, A] =
+      Async.fromCallback {
+        fut.onComplete(Async.handler.complete(_))
+      }
+  }
+
+  extension [Ctx, T](inline cs: Ctx ?=> CompletionStage[T]) {
+    inline def toAsync: Async[Ctx, T] =
+      Async.fromCallback {
+        cs.handle { (res, ex) =>
+          if !isNull(ex) then Async.handler.fail(ex)
+          else if !isNull(res) then Async.handler.succeed(res)
+          else Async.handler.fail(IllegalStateException("completion stage returned nothing without failure"))
+        }
+      }
+  }
+
+  class Promise[T] extends Callback[T] {
+    @volatile private var value: Option[Either[Throwable, T]] = None
+    @volatile private var callbacks: List[Callback[T]]        = Nil
+
+    override def apply(res: Either[Throwable, T]): Unit = {
+      synchronized {
+        value = Some(res)
+        val cbs = callbacks
+        callbacks = Nil
+        cbs
+      }.foreach(_.apply(res))
+    }
+
+    private def handler(a: Any)(cb: Callback[T]): Unit = synchronized {
+      value match
+        case None    => callbacks ::= cb
+        case Some(v) => cb(v)
+    }
+
+    val async: Async[Any, T] = new Async(handler)
+  }
 
   object DelayMacros {
     def applyInBlock[Ctx: Type, B: Type](
