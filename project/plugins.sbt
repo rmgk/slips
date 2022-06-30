@@ -13,16 +13,16 @@ addSbtPlugin("org.scala-native" % "sbt-scala-native" % "0.4.5")
 addSbtPlugin("org.portable-scala" % "sbt-scalajs-crossproject"      % "1.2.0")
 addSbtPlugin("org.portable-scala" % "sbt-scala-native-crossproject" % "1.2.0")
 
-// operations
-addSbtPlugin("com.dwijnand"     % "sbt-dynver"          % "4.1.1") // https://github.com/dwijnand/sbt-dynver
+// sbt settings
+addSbtPlugin("com.dwijnand"              % "sbt-dynver"    % "4.1.1") // https://github.com/dwijnand/sbt-dynver
+addSbtPlugin("com.eed3si9n"              % "sbt-buildinfo" % "0.11.0")
+addSbtPlugin("io.github.davidgregory084" % "sbt-tpolecat"  % "0.3.1") // https://github.com/typelevel/sbt-tpolecat
+
+// packaging
 addSbtPlugin("com.github.sbt" % "sbt-native-packager" % "1.9.9") // https://github.com/sbt/sbt-native-packager
+addSbtPlugin("org.scalameta"  % "sbt-native-image"    % "0.3.2") // https://github.com/scalameta/sbt-native-image
+addSbtPlugin("com.github.sbt" % "sbt-pgp"             % "2.1.2")
 
 // tooling
-addSbtPlugin("pl.project13.scala"        % "sbt-jmh"       % "0.4.3")
-addSbtPlugin("org.irundaia.sbt"          % "sbt-sassify"   % "1.5.1")
-addSbtPlugin("com.github.sbt"            % "sbt-pgp"       % "2.1.2")
-addSbtPlugin("io.github.davidgregory084" % "sbt-tpolecat"  % "0.3.3")
-addSbtPlugin("com.eed3si9n"              % "sbt-buildinfo" % "0.11.0")
-
-// https://github.com/scalameta/sbt-native-image
-addSbtPlugin("org.scalameta" % "sbt-native-image" % "0.3.2")
+addSbtPlugin("pl.project13.scala" % "sbt-jmh"     % "0.4.3")
+addSbtPlugin("org.irundaia.sbt"   % "sbt-sassify" % "1.5.1")
