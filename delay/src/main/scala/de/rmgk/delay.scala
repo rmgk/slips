@@ -27,7 +27,7 @@ object delay {
   }
 
   class Async[-Ctx, +A](val handleInCtx: Ctx => Callback[A] => Unit) {
-    @compileTimeOnly("await can only be called inside macro")
+    @compileTimeOnly("await must be used inside Async and may not be nested inside of expressions")
     def await: A = ???
   }
 
