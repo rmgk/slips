@@ -9,8 +9,8 @@ import math.Numeric.Implicits.infixNumericOps
 
 /** A Semigroup */
 trait Associative[A] {
+  // the reason for the duplication is that extensions do not work with SAM
   def combine(left: A, right: A): A
-
   extension (left: A) @targetName("combineExt") def combine(right: A): A = this.combine(left, right)
 }
 
@@ -40,13 +40,13 @@ object Associative {
       summonAll[Tuple.Map[pm.MirroredElemTypes, Associative]].toIArray.map(_.asInstanceOf[Associative[Any]])
     ProductAssociative(pm, instances)
 
-  class ProductAssociative[T <: Product](pm: Mirror.ProductOf[T], lattices: Seq[Associative[Any]])
+  class ProductAssociative[T <: Product](pm: Mirror.ProductOf[T], semigroups: Seq[Associative[Any]])
       extends Associative[T] {
     override def combine(left: T, right: T): T =
       pm.fromProduct(new Product {
         def canEqual(that: Any): Boolean = false
-        def productArity: Int            = lattices.length
-        def productElement(i: Int): Any  = lattices(i).combine(left.productElement(i), right.productElement(i))
+        def productArity: Int            = semigroups.length
+        def productElement(i: Int): Any  = semigroups(i).combine(left.productElement(i), right.productElement(i))
       })
   }
 
