@@ -19,31 +19,36 @@ object delay {
     inline def flatMap[B](inline f: A => Sync[Ctx, B]): Sync[Ctx, B] = Sync { f(sync.run).run }
   }
 
-  type CB[-A] = Either[Throwable, A] => Unit
+  type Callback[-A] = Either[Throwable, A] => Unit
+  extension [A](inline handler: Callback[A]) {
+    inline def complete(tr: Try[A]): Unit = handler(tr.toEither)
+    inline def succeed(value: A): Unit    = handler(Right(value))
+    inline def fail(ex: Throwable): Unit  = handler(Left(ex))
+  }
 
-  class Async[-Ctx, +A](val handleInCtx: Ctx => CB[A] => Unit) {
+  class Async[-Ctx, +A](val handleInCtx: Ctx => Callback[A] => Unit) {
     @compileTimeOnly("await can only be called inside macro")
     def await: A = ???
   }
 
   extension [Ctx, A](inline async: Async[Ctx, A]) {
-    inline def run(inline cb: CB[A])(using inline ctx: Ctx): Unit =
+    inline def run(inline cb: Callback[A])(using inline ctx: Ctx): Unit =
       ${ DelayMacros.handleInBlock[Ctx, A]('async, 'ctx, 'cb) }
     inline def map[B](inline f: A => B): Async[Ctx, B] =
-      Async[Ctx] {
+      Async {
         val value = async.await
         f(value)
       }
     inline def flatMap[B](inline f: A => Async[Ctx, B]): Async[Ctx, B] =
-      Async[Ctx].fromCallback[B] { cb =>
+      Async.fromCallback {
         async.run {
           case Right(a) =>
-            try delay.run[Ctx, B](f(a))(cb)
-            catch case scala.util.control.NonFatal(e) => cb(Left(e))
-          case Left(err) => cb(Left(err))
+            try delay.run(f(a))(Async.handler)
+            catch case scala.util.control.NonFatal(e) => Async.handler.fail(e)
+          case Left(err) => Async.handler.fail(err)
         }
       }
-    inline def runToFuture(using Ctx): Future[A] =
+    inline def runToFuture(using inline ctx: Ctx): Future[A] =
       val p = scala.concurrent.Promise[A]()
       async.run {
         case Left(e)  => p.failure(e)
@@ -53,20 +58,21 @@ object delay {
   }
 
   trait AsyncCompanion[Ctx] {
-    inline def fromCallback[A](inline f: Ctx ?=> CB[A] => Unit): Async[Ctx, A] =
-      new Async(ctx => cb => f(using ctx)(cb))
+    inline def fromCallback[A](inline f: Ctx ?=> Callback[A] ?=> Unit): Async[Ctx, A] =
+      new Async(ctx => cb => f(using ctx)(using cb))
+
+    inline def handler[A](using cb: Callback[A]): Callback[A] = cb
 
     inline def fromFuture[A](inline fut: Future[A])(using inline ec: ExecutionContext): Async[Ctx, A] =
-      Async.fromCallback { cb =>
-        fut.onComplete(t => cb(t.toEither))
+      Async.fromCallback {
+        fut.onComplete(Async.handler.complete(_))
       }
 
     inline def apply[A](inline expr: Ctx ?=> A): Async[Ctx, A] =
       new Async[Ctx, A](ctx =>
         cb => {
           try syntax(expr(using ctx)).run(cb)(using ctx)
-          catch
-            case NonFatal(e) => cb(Left(e))
+          catch case NonFatal(e) => cb(Left(e))
         }
       )
 
@@ -102,7 +108,7 @@ object delay {
     def handleInBlock[Ctx: Type, B: Type](
         dio: Expr[Async[Ctx, B]],
         ctx: Expr[Ctx],
-        cb: Expr[CB[B]]
+        cb: Expr[Callback[B]]
     )(using quotes: Quotes): Expr[Unit] = {
       import quotes.reflect.*
       val maybeBlock = cleanBlock(dio.asTerm)

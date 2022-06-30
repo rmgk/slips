@@ -1,3 +1,5 @@
+package de.rmgk
+
 import de.rmgk.delay.*
 
 import scala.concurrent.ExecutionContext.global
@@ -20,3 +22,10 @@ def run() =
 
   println("runs first")
   res2.run(println)(using global)
+
+  println(printCode {
+    Async {
+      Async { 123 }.await
+      4
+    }
+  })
