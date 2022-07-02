@@ -39,10 +39,7 @@ object delay {
     inline def run(inline cb: Callback[A])(using inline ctx: Ctx): Unit =
       ${ DelayMacros.handleInBlock[Ctx, A]('async, 'ctx, 'cb) }
     inline def map[B](inline f: A => B): Async[Ctx, B] =
-      Async {
-        val value = async.await
-        f(value)
-      }
+      async.flatMap { a => Sync { f(a) } }
     inline def flatMap[B](inline f: A => Async[Ctx, B]): Async[Ctx, B] =
       Async.fromCallback {
         async.run {
