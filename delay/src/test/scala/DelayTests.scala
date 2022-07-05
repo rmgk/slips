@@ -64,18 +64,24 @@ class DelayTests extends munit.FunSuite {
     val m1                     = s"starting something"
     val m2                     = s"does not happen anymore"
     val m3                     = "resource"
+    val m4                     = "afterwards"
     val me                     = "oh noes!"
 
-    Async[String] {
-      messages ::= m1
-      throw IllegalStateException(me)
-      messages ::= m2
-    }.close { messages ::= summon[String] }
+    Async[Unit] {
+      Async.scope(m3, me => messages ::= me) { msg =>
+        messages ::= m1
+        throw IllegalStateException(me)
+        messages ::= m2
+      }.await
+    }
       .run {
-        case Left(e) => assert(e.getMessage == me)
-        case _       => assert(false)
-      }(using m3)
+        case Left(e) =>
+          assert(e.getMessage == me)
+          messages ::= m4
+        case _ => assert(false)
+      }(using ())
 
-    assert(messages == List(m3, m1))
+    assertEquals(messages, List(m4, m3, m1))
   }
+
 }

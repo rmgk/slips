@@ -45,7 +45,7 @@ object delay {
         async.run {
           case Right(a) =>
             try delay.run(f(a))(Async.handler)
-            catch case scala.util.control.NonFatal(e) => Async.handler.fail(e)
+            catch case NonFatal(e) => Async.handler.fail(e)
           case Left(err) => Async.handler.fail(err)
         }
       }
@@ -61,15 +61,6 @@ object delay {
       val p = new Promise[A]
       async.run(p)
       p.async
-
-    inline def close(inline handler: Ctx ?=> Unit): Async[Ctx, A] =
-      new Async[Ctx, A](ctx =>
-        cb =>
-          async.run { res =>
-            handler(using ctx)
-            cb(res)
-          }(using ctx)
-      )
   }
 
   trait AsyncCompanion[Ctx] {
@@ -88,6 +79,21 @@ object delay {
 
     inline def syntax[A](inline expr: A): Async[Ctx, A] =
       ${ DelayMacros.asyncImpl[Ctx, A]('{ expr }) }
+
+    inline def scope[R, A](inline open: R, inline close: R => Unit)(inline body: R => Ctx ?=> A): Async[Ctx, A] =
+      new Async[Ctx, A](ctx =>
+        cb =>
+          val v = open
+          Async { body(v) }.run { res =>
+            try
+              close(v)
+              cb(res)
+            catch
+              case NonFatal(e) =>
+                res.swap.foreach(inner => e.addSuppressed(inner))
+                cb.fail(e)
+          }(using ctx)
+      )
   }
   inline def Async[Ctx]: AsyncCompanion[Ctx] = new AsyncCompanion[Ctx] {}
 
@@ -200,6 +206,20 @@ object delay {
     def asyncImpl[Ctx: Type, T: Type](expr: Expr[T])(using quotes: Quotes): Expr[Async[Ctx, T]] = {
       import quotes.reflect.*
 
+      def blockedIO(stmts: List[Statement], io: Term)(withBound: Term => Expr[Async[Ctx, T]]) =
+        io.tpe.asType match {
+          case '[Async[Ctx, α]] =>
+            '{
+              ${ (if stmts.isEmpty then io else Block(stmts, io)).asExprOf[Async[Ctx, α]] }.flatMap {
+                (v: α) => ${ withBound('v.asTerm) }
+              }
+            }
+          case '[Async[γ, α]] => report.errorAndAbort(
+              s"Can only await matching context, but »${Type.show[γ]}« is not »${Type.show[Ctx]}«",
+              io.asExpr
+            )
+        }
+
       cleanBlock(expr.asTerm) match {
         case block @ Block(statements: List[Statement], expr) =>
           val Block(List(stmt), init) = ValDef.let(Symbol.spliceOwner, "async$macro$result", expr) { ref =>
@@ -208,27 +228,14 @@ object delay {
           (statements :+ stmt).foldRight[Term](init) { (s, acc) =>
             s match {
               case vd @ ValDef(name, typeTree, Some(CleanBlock(Block(stmts, Select(io, "await"))))) =>
-                typeTree.tpe.asType match {
-                  case '[α] =>
-                    '{
-                      ${ (if stmts.isEmpty then io else Block(stmts, io)).asExprOf[Async[Ctx, α]] }.flatMap[T] {
-                        (v: α) =>
-                          ${
-                            Block(
-                              List(ValDef.copy(vd)(name, typeTree, Some('{ v }.asTerm))),
-                              acc
-                            ).asExprOf[Async[Ctx, T]]
-                          }
-                      }
-                    }.asTerm
-                }
-              case CleanBlock(Block(stmts, Select(io, "await"))) =>
-                '{
-                  ${ (if stmts.isEmpty then io else Block(stmts, io)).asExprOf[Async[Ctx, Any]] }.flatMap[T] {
-                    (_: Any) =>
-                      ${ acc.asExprOf[Async[Ctx, T]] }
-                  }
+                blockedIO(stmts, io) { v =>
+                  Block(
+                    List(ValDef.copy(vd)(name, typeTree, Some(v))),
+                    acc
+                  ).asExprOf[Async[Ctx, T]]
                 }.asTerm
+              case CleanBlock(Block(stmts, Select(io, "await"))) =>
+                blockedIO(stmts, io) { _ => acc.asExprOf[Async[Ctx, T]] }.asTerm
               case _ =>
                 Block(List(s), acc)
             }
