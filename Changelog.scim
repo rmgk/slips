@@ -7,7 +7,7 @@
 	• Support for unicode .any
 • Delay:
 	• extract IO monad part of Scip into own project
-	• experiment with macros for direct style monads
+	• experiment with macros for direct style delayed synchronous and asynchronous sequential code
 • Webview:
 	• add webview experiments based on :link{https://github.com/rmgk/slips/tree/master/webview/src/main}
 
