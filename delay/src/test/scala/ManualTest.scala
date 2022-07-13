@@ -15,12 +15,12 @@ def run() =
     val a = Future {
       println(s"running future")
       Random.nextInt()
-    }.toAsync.await
+    }.toAsync.bind
     def of = Future { println(s"in another future, a was $a") }
     Sync { println("just for show") }.run
-    of.toAsync.await
+    of.toAsync.bind
     val b = Sync { println("runs later"); math.pow(2, 10) }.run
-    Future { a % b }.toAsync.await
+    Future { a % b }.toAsync.bind
   }
 
   println("runs first")
@@ -28,7 +28,7 @@ def run() =
 
   println(printCode {
     Async {
-      Async { 123 }.await
+      Async { 123 }.bind
       4
     }
   })

@@ -31,8 +31,8 @@ object delay {
   }
 
   class Async[-Ctx, +A](val handleInCtx: Ctx => Callback[A] => Unit) {
-    @compileTimeOnly("await must be used inside Async and may not be nested inside of expressions")
-    def await: A = ???
+    @compileTimeOnly("bind must be used inside Async and may not be nested inside of expressions")
+    def bind: A = ???
   }
 
   extension [Ctx, A](inline async: Async[Ctx, A]) {
@@ -215,7 +215,7 @@ object delay {
               }
             }
           case '[Async[γ, α]] => report.errorAndAbort(
-              s"Can only await matching context, but »${Type.show[γ]}« is not »${Type.show[Ctx]}«",
+              s"Can only bind matching context, but »${Type.show[γ]}« is not »${Type.show[Ctx]}«",
               io.asExpr
             )
         }
@@ -227,14 +227,14 @@ object delay {
           }
           (statements :+ stmt).foldRight[Term](init) { (s, acc) =>
             s match {
-              case vd @ ValDef(name, typeTree, Some(CleanBlock(Block(stmts, Select(io, "await"))))) =>
+              case vd @ ValDef(name, typeTree, Some(CleanBlock(Block(stmts, Select(io, "bind"))))) =>
                 blockedIO(stmts, io) { v =>
                   Block(
                     List(ValDef.copy(vd)(name, typeTree, Some(v))),
                     acc
                   ).asExprOf[Async[Ctx, T]]
                 }.asTerm
-              case CleanBlock(Block(stmts, Select(io, "await"))) =>
+              case CleanBlock(Block(stmts, Select(io, "bind"))) =>
                 blockedIO(stmts, io) { _ => acc.asExprOf[Async[Ctx, T]] }.asTerm
               case _ =>
                 Block(List(s), acc)

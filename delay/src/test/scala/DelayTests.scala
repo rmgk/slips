@@ -16,8 +16,8 @@ class DelayTests extends munit.FunSuite {
 
     val counting = Async {
       count += 1
-      val success = Async { 100 }.await
-      failed.await
+      val success = Async { 100 }.bind
+      failed.bind
       count += 1
     }
 
@@ -38,14 +38,14 @@ class DelayTests extends munit.FunSuite {
 
     val counting = Async {
       count += 1
-      val success = Async { 100 }.await
+      val success = Async { 100 }.bind
       count += 1
       val failure = {
         throw IllegalStateException("test2")
         Async(30)
-      }.await
+      }.bind
       count += 1
-      failed.await
+      failed.bind
       count += 1
     }
 
@@ -72,7 +72,7 @@ class DelayTests extends munit.FunSuite {
         messages ::= m1
         throw IllegalStateException(me)
         messages ::= m2
-      }.await
+      }.bind
     }
       .run {
         case Left(e) =>
