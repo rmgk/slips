@@ -45,10 +45,24 @@ object delay {
         async.run {
           case Right(a) =>
             try delay.run(f(a))(Async.handler)
-            catch case NonFatal(e) => Async.handler.fail(e)
+            catch case e if NonFatal(e) => Async.handler.fail(e)
           case Left(err) => Async.handler.fail(err)
         }
       }
+
+    inline def after(inline body: Ctx ?=> Either[Throwable, A] => Unit): Async[Ctx, A] =
+      Async.fromCallback {
+        async.run { res =>
+          try
+            body(res)
+            Async.handler(res)
+          catch
+            case e if NonFatal(e) =>
+              res.swap.foreach(inner => e.addSuppressed(inner))
+              Async.handler.fail(e)
+        }
+      }
+
     inline def runToFuture(using inline ctx: Ctx): Future[A] =
       val p = scala.concurrent.Promise[A]()
       async.run {
@@ -61,6 +75,7 @@ object delay {
       val p = new Promise[A]
       async.run(p)
       p.async
+
   }
 
   trait AsyncCompanion[Ctx] {
@@ -73,27 +88,18 @@ object delay {
       new Async[Ctx, A](ctx =>
         cb => {
           try syntax(expr(using ctx)).run(cb)(using ctx)
-          catch case NonFatal(e) => cb(Left(e))
+          catch case e if NonFatal(e) => cb(Left(e))
         }
       )
 
     inline def syntax[A](inline expr: A): Async[Ctx, A] =
       ${ DelayMacros.asyncImpl[Ctx, A]('{ expr }) }
 
-    inline def scope[R, A](inline open: R, inline close: R => Unit)(inline body: R => Ctx ?=> A): Async[Ctx, A] =
-      new Async[Ctx, A](ctx =>
-        cb =>
-          val v = open
-          Async { body(v) }.run { res =>
-            try
-              close(v)
-              cb(res)
-            catch
-              case NonFatal(e) =>
-                res.swap.foreach(inner => e.addSuppressed(inner))
-                cb.fail(e)
-          }(using ctx)
-      )
+    inline def resource[R, A](inline open: R, inline close: R => Unit)(inline body: Ctx ?=> R => A): Async[Ctx, A] =
+      Async {
+        val r = open
+        Async { body(r) }.after(_ => close(r)).bind
+      }
   }
   inline def Async[Ctx]: AsyncCompanion[Ctx] = new AsyncCompanion[Ctx] {}
 

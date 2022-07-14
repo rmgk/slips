@@ -68,7 +68,7 @@ class DelayTests extends munit.FunSuite {
     val me                     = "oh noes!"
 
     Async[Unit] {
-      Async.scope(m3, me => messages ::= me) { msg =>
+      Async.resource(m3, me => messages ::= me) { msg =>
         messages ::= m1
         throw IllegalStateException(me)
         messages ::= m2
