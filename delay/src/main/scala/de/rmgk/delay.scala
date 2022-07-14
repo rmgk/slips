@@ -22,6 +22,7 @@ object delay {
     inline def flatMap[B](inline f: A => Sync[Ctx, B]): Sync[Ctx, B] = Sync { f(sync.run).run }
   }
 
+  @FunctionalInterface
   trait Callback[-A] {
     def succeed(value: A): Unit           = complete(Right(value))
     def fail(ex: Throwable): Unit         = complete(Left(ex))
