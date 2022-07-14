@@ -96,9 +96,9 @@ object delay {
       ${ DelayMacros.asyncImpl[Ctx, A]('{ expr }) }
 
     inline def resource[R, A](inline open: R, inline close: R => Unit)(inline body: Ctx ?=> R => A): Async[Ctx, A] =
-      Async {
+      Async[Ctx] {
         val r = open
-        Async { body(r) }.after(_ => close(r)).bind
+        Async[Ctx] { body(r) }.after(_ => close(r)).bind
       }
   }
   inline def Async[Ctx]: AsyncCompanion[Ctx] = new AsyncCompanion[Ctx] {}
