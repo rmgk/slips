@@ -6,11 +6,11 @@ import java.util.concurrent.CompletionStage
 import scala.annotation.compileTimeOnly
 import scala.concurrent.{ExecutionContext, Future}
 import scala.quoted.{Expr, Quotes, Type}
-import scala.util.{Random, Try}
 import scala.util.control.NonFatal
+import scala.util.{Failure, Random, Success, Try}
 
 object delay {
-  class Sync[-Ctx, +A](val runInContext: Ctx => A) extends Async[Ctx, A](ctx => cb => cb(Right(runInContext(ctx))))
+  class Sync[-Ctx, +A](val runInContext: Ctx => A) extends Async[Ctx, A](ctx => cb => cb.succeed(runInContext(ctx)))
 
   class SyncCompanion[Ctx]:
     inline def apply[A](inline run: Ctx ?=> A): Sync[Ctx, A] = new Sync(run(using _))
@@ -22,12 +22,11 @@ object delay {
     inline def flatMap[B](inline f: A => Sync[Ctx, B]): Sync[Ctx, B] = Sync { f(sync.run).run }
   }
 
-  type Callback[-A] = Either[Throwable, A] => Unit
-  extension [A](inline handler: Callback[A]) {
-    inline def complete(tr: Try[A]): Unit               = handler(tr.toEither)
-    inline def complete(tr: Either[Throwable, A]): Unit = handler(tr)
-    inline def succeed(value: A): Unit                  = handler(Right(value))
-    inline def fail(ex: Throwable): Unit                = handler(Left(ex))
+  trait Callback[-A] {
+    def succeed(value: A): Unit           = complete(Right(value))
+    def fail(ex: Throwable): Unit         = complete(Left(ex))
+    inline def complete(tr: Try[A]): Unit = complete(tr.toEither)
+    def complete(res: Either[Throwable, A]): Unit
   }
 
   class Async[-Ctx, +A](val handleInCtx: Ctx => Callback[A] => Unit) {
@@ -55,10 +54,10 @@ object delay {
         async.run { res =>
           try
             body(res)
-            Async.handler(res)
+            Async.handler.complete(res)
           catch
             case e if NonFatal(e) =>
-              res.swap.foreach(inner => e.addSuppressed(inner))
+              res.swap.foreach(e.addSuppressed)
               Async.handler.fail(e)
         }
       }
@@ -88,7 +87,7 @@ object delay {
       new Async[Ctx, A](ctx =>
         cb => {
           try syntax(expr(using ctx)).run(cb)(using ctx)
-          catch case e if NonFatal(e) => cb(Left(e))
+          catch case e if NonFatal(e) => cb.fail(e)
         }
       )
 
@@ -125,19 +124,19 @@ object delay {
     @volatile private var value: Option[Either[Throwable, T]] = None
     @volatile private var callbacks: List[Callback[T]]        = Nil
 
-    override def apply(res: Either[Throwable, T]): Unit = {
+    override def complete(res: Either[Throwable, T]): Unit = {
       synchronized {
         value = Some(res)
         val cbs = callbacks
         callbacks = Nil
         cbs
-      }.foreach(_.apply(res))
+      }.foreach(_.complete(res))
     }
 
     private def handler(a: Any)(cb: Callback[T]): Unit = synchronized {
       value match
         case None    => callbacks ::= cb
-        case Some(v) => cb(v)
+        case Some(v) => cb.complete(v)
     }
 
     val async: Async[Any, T] = new Async(handler)
@@ -180,7 +179,7 @@ object delay {
               Some(
                 cleanBlock(Block(
                   stmts,
-                  Expr.betaReduce('{ $cb(Right($scxfun($ctx))) }).asTerm
+                  Expr.betaReduce('{ $cb.succeed($scxfun($ctx)) }).asTerm
                 )).asExprOf[Unit]
               )
             case other => None
