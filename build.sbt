@@ -1,13 +1,16 @@
 import Dependencies.*
 import Settings.*
 
+scalaVersion_3 // define explicit root version, otherwise cross building force defaults a 2.12 build on everything
+publish / skip := true
+
 val commonSettings = Def.settings(
   organization := "de.rmgk.slips",
   scalaVersion_3,
   libraryDependencies ++= List(munit.value, munitScalacheck.value)
 )
 
-val logging = crossProject(JSPlatform, JVMPlatform)
+val logging = crossProject(JSPlatform, JVMPlatform, NativePlatform)
   .crossType(CrossType.Pure).settings(
     commonSettings,
     commonCrossBuildVersions,
