@@ -13,18 +13,18 @@ object resources {
   }
 
   trait ResourceContext[Res <: Resource] {
-    def access(res: Res): res.Type
+    def accessResource(res: Res): res.Type
   }
 
-  inline def getResources[Result, ReSource, ResourceContext](inline expr: Result)
-      : (List[ReSource], ResourceContext => Result) =
-    ${ resourceMacro[Result, ReSource, ResourceContext]('expr) }
+  inline def collectResources[Result, Res <: Resource, Context <: ResourceContext[Res]](inline expr: Result)
+      : (List[Res], Context => Result) =
+    ${ resourceMacro[Result, Res, Context]('expr) }
 
   def resourceMacro[Res: Type, ReSource: Type, ResourceContext: Type](
       expr: Expr[Res]
   )(using q: Quotes): Expr[(List[ReSource], ResourceContext => Res)] =
     import q.reflect.*
-    MacroLego[ReSource, ResourceContext].makeReactive[Res](expr).asInstanceOf[Expr[(
+    MacroLego[ReSource, ResourceContext].getResources[Res](expr).asInstanceOf[Expr[(
         List[ReSource],
         ResourceContext => Res
     )]]
@@ -44,15 +44,12 @@ object resources {
     }
 
     class ContainsSymbol(defs: List[quotes.reflect.Symbol]) extends TreeAccumulator[Boolean] {
-      import quotes.reflect.*
-
       override def foldTree(x: Boolean, tree: Tree)(owner: Symbol): Boolean =
         if defs.contains(tree.symbol) then true
         else foldOverTree(x, tree)(owner)
     }
 
     class FindResource() extends TreeAccumulator[(List[Term], Boolean)] {
-
       override def foldTree(
           acc: (List[quotes.reflect.Term], Boolean),
           tree: quotes.reflect.Tree
@@ -72,17 +69,14 @@ object resources {
     }
 
     class ReplaceInterp(replacement: Map[Term, Term], ticket: Term) extends TreeMap {
-
       override def transformTerm(tree: quotes.reflect.Term)(owner: quotes.reflect.Symbol): quotes.reflect.Term = {
-        def accessTree(accessed: Term): Term = Apply(
-          Select.unique(ticket, "access"),
-          List(accessed)
-        )
-
         def replaceAccess(xy: Term): Term = {
           replacement.get(xy) match
-            case Some(replaced) => accessTree(replaced)
-            case None           => report.errorAndAbort("can not access resources depending on other resources", xy.pos)
+            case Some(replaced) => Apply(
+                Select.unique(ticket, "accessResource"),
+                List(replaced)
+              )
+            case None => report.errorAndAbort("can not access resources depending on other resources", xy.pos)
           end match
         }
 
@@ -96,7 +90,7 @@ object resources {
       }
     }
 
-    def makeReactive[Res: Type](expr: Expr[Res]): Expr[Any] = {
+    def getResources[Res: Type](expr: Expr[Res]): Expr[Any] = {
       val fi                = FindResource().foldTree((Nil, true), expr.asTerm)(Symbol.spliceOwner)
       val foundAbstractions = fi._1
       val foundStatic       = fi._2
@@ -108,7 +102,7 @@ object resources {
         containsSymbol.foldTree(false, fa)(Symbol.spliceOwner)
       }
 
-      val funType = MethodType.apply(List("ticket"))(
+      val funType = MethodType.apply(List("context"))(
         (_: MethodType) => List(TypeRepr.of[ResourceContext]),
         (_: MethodType) => TypeRepr.of[Res]
       )
