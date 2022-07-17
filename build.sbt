@@ -33,7 +33,7 @@ val datalog = crossProject(JSPlatform, JVMPlatform, NativePlatform)
     noPublish
   )
 
-val applicative = crossProject(JSPlatform, JVMPlatform, NativePlatform)
+val resource = crossProject(JSPlatform, JVMPlatform, NativePlatform)
   .crossType(CrossType.Pure).settings(
     commonSettings
   )

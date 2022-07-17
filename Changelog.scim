@@ -1,5 +1,10 @@
 = Changelog
 
+== v.next
+
+• Resource:
+	• general applicative syntax (similar like SBT or REScala)
+
 == v0.4.4
 
 • Scip:
