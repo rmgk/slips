@@ -30,7 +30,11 @@ val category = crossProject(JSPlatform, JVMPlatform, NativePlatform)
 val options = crossProject(JSPlatform, JVMPlatform, NativePlatform)
   .crossType(CrossType.Pure).settings(
     commonSettings,
-    libraryDependencies += scopt.value
+    libraryDependencies += scopt.value,
+  )
+  .jsSettings(
+    // seems to be required to run JS tests on node
+    Test / scalaJSLinkerConfig ~= { _.withModuleKind(ModuleKind.CommonJSModule) }
   )
 
 val datalog = crossProject(JSPlatform, JVMPlatform, NativePlatform)
