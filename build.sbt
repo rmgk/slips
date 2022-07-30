@@ -29,8 +29,8 @@ val category = crossProject(JSPlatform, JVMPlatform, NativePlatform)
 
 val options = crossProject(JSPlatform, JVMPlatform, NativePlatform)
   .crossType(CrossType.Pure).settings(
-  commonSettings,
-  libraryDependencies += scopt.value
+    commonSettings,
+    libraryDependencies += scopt.value
   )
 
 val datalog = crossProject(JSPlatform, JVMPlatform, NativePlatform)

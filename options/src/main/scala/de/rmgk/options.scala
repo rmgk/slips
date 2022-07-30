@@ -17,12 +17,14 @@ object options {
 
   type Required[T] = T
 
-  case class Argument[T, Occurrences[_], ArgName <: String, Description <: String, Style <: OptStyle]() {
+  case class Argument[T, Occurrences[_], ArgName <: String, Description <: String, Style <: OptStyle](default: Option[Occurrences[T]] = None) {
     private val contents: ListBuffer[T]           = ListBuffer.empty
     private[options] def collectValue(v: T): Unit = contents.addOne(v)
 
     inline def value: Occurrences[T] =
-      inline erasedValue[Occurrences[T]] match
+      if contents.isEmpty && default.nonEmpty then default.get
+      else
+        inline erasedValue[Occurrences[T]] match
         case _: List[_]     => contents.toList.asInstanceOf[Occurrences[T]]
         case _: Option[_]   => contents.headOption.asInstanceOf[Occurrences[T]]
         case _: Required[_] => contents.head.asInstanceOf[Occurrences[T]]
@@ -40,7 +42,6 @@ object options {
         val desc    = constValue[desc]
         val name    = constValue[label].asInstanceOf[String]
         val argname = constValue[argname]
-        println(s"parsing $name $desc")
         val start: scopt.OParser[τ, Args] = inline erasedValue[sty] match
           case _: OptStyle.Named      => builder.opt[τ](name)(using summonInline[Read[τ]])
           case _: OptStyle.Positional => builder.arg[τ](name)(using summonInline[Read[τ]])
