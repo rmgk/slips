@@ -13,6 +13,7 @@ object options {
     case Positional()
 
   type Single[T] = T
+  type Flag[T]   = Boolean
 
   case class Argument[T, Occurrences[_], OptStyle <: Style](
       transform: OParser[T, Any] => OParser[T, Any] = identity,
@@ -27,6 +28,7 @@ object options {
         inline erasedValue[Occurrences[T]] match
           case _: List[_]   => contents.toList.asInstanceOf[Occurrences[T]]
           case _: Option[_] => contents.headOption.asInstanceOf[Occurrences[T]]
+          case _: Flag[_]   => contents.nonEmpty.asInstanceOf[Occurrences[T]]
           case _: Single[_] => contents.head.asInstanceOf[Occurrences[T]]
 
   }
@@ -55,6 +57,7 @@ object options {
         val validating = inline erasedValue[occ[τ]] match
           case _: List[τ]   => middle.unbounded()
           case _: Option[τ] => middle.optional()
+          case _: Flag[τ]   => middle.optional()
           case _: Single[τ] => if getArg(instance).default.isEmpty then middle.minOccurs(1) else middle
 
         val end = getArg(instance).transform(validating.asInstanceOf).asInstanceOf[OParser[_, Args]]
