@@ -15,7 +15,7 @@ object options {
   type Single[T] = T
 
   case class Argument[T, Occurrences[_], OptStyle <: Style](
-      transform: OParser[T, Any] => OParser[T, Any],
+      transform: OParser[T, Any] => OParser[T, Any] = identity,
       default: Option[Occurrences[T]] = None
   ) {
     private[options] val contents: ListBuffer[T]  = ListBuffer.empty
