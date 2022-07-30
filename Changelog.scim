@@ -4,6 +4,8 @@
 
 • Resource:
 	• general applicative syntax (similar like SBT or REScala)
+• Options:
+	• add option parsing syntax based on scopt
 
 == v0.4.4
 
