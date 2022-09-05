@@ -11,14 +11,14 @@ object Dependencies {
   object Versions {
     val betterFiles        = "3.9.1"
     val catsCore           = "2.6.1"
-    val circeCore          = "0.14.1"
-    val decline            = "2.2.0"
+    val circeCore          = "0.14.2"
+    val decline            = "2.3.0"
     val directories        = "26"
     val jetty              = "9.4.48.v20220622"
     val jol                = "0.16"
-    val jsoniterScalaCore  = "2.13.38"
+    val jsoniterScalaCore  = "2.16.0"
     val jsoniterScalaOld   = "2.13.3" // this is the latest version supporting Scala 2.11 and java 8
-    val jsoup              = "1.15.2"
+    val jsoup              = "1.15.3"
     val munit              = "1.0.0-M6"
     val normalizecss       = "8.0.1"
     val okHttp             = "4.10.0"
@@ -29,7 +29,7 @@ object Dependencies {
     val scala211           = "2.11.12"
     val scala212           = "2.12.16"
     val scala213           = "2.13.8"
-    val scala3             = "3.1.3"
+    val scala3             = "3.2.0"
     val scalaJavaTime      = "2.3.0"
     val scalaLoci          = "609b4c1b58"
     val scalaSwing         = "3.0.0"
@@ -37,11 +37,11 @@ object Dependencies {
     val scalactic          = "3.0.0"
     val scalajsDom         = "2.2.0"
     val scalatags          = "0.11.1"
-    val scalatest          = "3.2.12"
-    val scalatestpluscheck = "3.2.12.0"
+    val scalatest          = "3.2.13"
+    val scalatestpluscheck = "3.2.13.0"
     val scopt              = "4.1.0"
     val scribe             = "3.8.3"
-    val slips              = "0.4.4"
+    val slips              = "3b223bd2d9"
     val sourcecode         = "0.3.0"
     val tomlScala          = "0.2.2"
     val upickle            = "2.0.0"
@@ -83,7 +83,7 @@ object Dependencies {
   val scribeSlf4j = Def.setting("com.outr" %% "scribe-slf4j" % V.scribe)
   val sourcecode  = Def.setting("com.lihaoyi" %%% "sourcecode" % V.sourcecode)
   val tomlScala   = Def.setting("tech.sparse" %%% "toml-scala" % V.tomlScala)
-  val upickle     = Def.setting("com.lihaoyi" %% "upickle" % V.upickle)
+  val upickle     = Def.setting("com.lihaoyi" %%% "upickle" % V.upickle)
 
   val jsoniterScalaAll = Def.setting {
     val jsoniterVersion = if (Settings.`is 2.11`(scalaVersion.value))
@@ -103,11 +103,12 @@ object Dependencies {
     .map(n => "io.circe" %%% s"circe-$n" % V.circeCore))
 
   object slips {
-    val logging  = Def.setting("de.rmgk.slips" %%% "logging" % V.slips)
-    val chain    = Def.setting("de.rmgk.slips" %%% "chain" % V.slips)
     val category = Def.setting("de.rmgk.slips" %%% "category" % V.slips)
-    val scip     = Def.setting("de.rmgk.slips" %%% "scip" % V.slips)
+    val chain    = Def.setting("de.rmgk.slips" %%% "chain" % V.slips)
     val delay    = Def.setting("de.rmgk.slips" %%% "delay" % V.slips)
+    val logging  = Def.setting("de.rmgk.slips" %%% "logging" % V.slips)
+    val options  = Def.setting("de.rmgk.slips" %%% "options" % V.slips)
+    val scip     = Def.setting("de.rmgk.slips" %%% "scip" % V.slips)
   }
 
   object loci {
@@ -141,11 +142,11 @@ object Dependencies {
     }
     Seq(
       libraryDependencies ++= Seq(
-        "org.scalafx" %% "scalafx" % "17.0.1-R26",
+        "org.scalafx" %% "scalafx" % "18.0.2-R29",
         scalaSwing.value,
       ),
       libraryDependencies ++= Seq("base", "controls", "fxml", "graphics", "media", "swing", "web").map(m =>
-        "org.openjfx" % s"javafx-$m" % "18.0.1" classifier osName
+        "org.openjfx" % s"javafx-$m" % "18.0.2" classifier osName
       )
     )
   }
