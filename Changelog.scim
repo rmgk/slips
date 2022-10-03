@@ -1,9 +1,9 @@
 = Changelog
 
-== v.next
+== v0.4.5
 
 • Resource:
-	• general applicative syntax (similar like SBT or REScala)
+	• general applicative syntax (similar to SBT or REScala)
 • Options:
 	• add option parsing syntax based on scopt
 
