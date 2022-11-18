@@ -1,6 +1,5 @@
 package de.rmgk
 
-import java.util.Objects
 import java.util.Objects.isNull
 import java.util.concurrent.CompletionStage
 import scala.annotation.compileTimeOnly
