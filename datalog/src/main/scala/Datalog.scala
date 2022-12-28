@@ -1,5 +1,7 @@
 package de.rmgk
 
+import scala.language.implicitConversions
+
 object Datalog {
   case class Rule(head: Atom, body: List[Atom]) {
     override def toString: String = {
