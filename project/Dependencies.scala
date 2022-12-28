@@ -142,11 +142,11 @@ object Dependencies {
     }
     Seq(
       libraryDependencies ++= Seq(
-        "org.scalafx" %% "scalafx" % "18.0.2-R29",
+        "org.scalafx" %% "scalafx" % "19.0.0-R30",
         scalaSwing.value,
       ),
       libraryDependencies ++= Seq("base", "controls", "fxml", "graphics", "media", "swing", "web").map(m =>
-        "org.openjfx" % s"javafx-$m" % "18.0.2" classifier osName
+        "org.openjfx" % s"javafx-$m" % "19" classifier osName
       )
     )
   }
