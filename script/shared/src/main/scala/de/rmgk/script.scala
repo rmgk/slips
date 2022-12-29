@@ -54,7 +54,7 @@ object RunnableParts {
 }
 
 extension (pb: ProcessBuilder)
-  def run(): Either[Int, String] = {
+  def runResult(): Either[Int, String] = {
     val process = pb
       .inheritIO().redirectOutput(Redirect.PIPE)
       .start()
@@ -64,6 +64,8 @@ extension (pb: ProcessBuilder)
     then Left(code)
     else Right(Using(process.getInputStream)(streamToString).get)
   }
+  def run(): String =
+    pb.runResult().toOption.get
 
 extension (sc: StringContext)
   def process(args: RunnableParts*): ProcessBuilder = {
