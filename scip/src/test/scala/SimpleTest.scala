@@ -92,7 +92,6 @@ class SimpleTest extends munit.FunSuite {
         c <- cp
       yield (a, b, c)
 
-
     val res = parse.run(using Scx("abc"))
     assertEquals(res, ("a", "b", "c"))
   }
