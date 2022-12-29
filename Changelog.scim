@@ -1,5 +1,10 @@
 = Changelog
 
+== v0.next
+
+• Script
+	• convenience for process builder and reading files that works on ScalaNative
+
 == v0.4.5
 
 • Resource:
