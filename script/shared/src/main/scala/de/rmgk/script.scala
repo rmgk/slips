@@ -39,17 +39,17 @@ abstract class RunnableParts {
 }
 
 object RunnableParts {
-  given Conversion[String, RunnableParts] = s =>
+  given stringRunnable: Conversion[String, RunnableParts] = s =>
     new RunnableParts {
       override def parts = List(s)
     }
-  given Conversion[Path, RunnableParts] = p =>
+  given pathRunnable: Conversion[Path, RunnableParts] = p =>
     new RunnableParts {
       override def parts = List(p.toString)
     }
-  given Conversion[Seq[RunnableParts], RunnableParts] = p =>
+  given seqRunnable[A](using conv: Conversion[A, RunnableParts]): Conversion[Seq[A], RunnableParts] = p =>
     new RunnableParts {
-      override def parts = p.flatMap(_.parts)
+      override def parts = p.flatMap(x => conv(x).parts)
     }
 }
 
@@ -67,7 +67,7 @@ extension (pb: ProcessBuilder)
 
 extension (sc: StringContext)
   def process(args: RunnableParts*): ProcessBuilder = {
-    val components = sc.parts.iterator.zipAll(args, "", List.empty: RunnableParts).flatMap { (part, arg) =>
+    val components = sc.parts.iterator.zipAll(args, "", List.empty[String]: RunnableParts).flatMap { (part, arg) =>
       part.split("\\s").iterator.concat(arg.parts)
     }.filter(s => !s.isBlank).toVector
     new ProcessBuilder(components.asJava)
