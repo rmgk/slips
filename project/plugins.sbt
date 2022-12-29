@@ -14,8 +14,8 @@ addSbtPlugin("org.portable-scala" % "sbt-scalajs-crossproject"      % "1.2.0")
 addSbtPlugin("org.portable-scala" % "sbt-scala-native-crossproject" % "1.2.0")
 
 // sbt settings
-addSbtPlugin("com.dwijnand"              % "sbt-dynver"    % "4.1.1") // https://github.com/dwijnand/sbt-dynver
-addSbtPlugin("com.eed3si9n"              % "sbt-buildinfo" % "0.11.0")
+addSbtPlugin("com.dwijnand" % "sbt-dynver"    % "4.1.1") // https://github.com/dwijnand/sbt-dynver
+addSbtPlugin("com.eed3si9n" % "sbt-buildinfo" % "0.11.0")
 
 // packaging
 addSbtPlugin("com.github.sbt" % "sbt-native-packager" % "1.9.11") // https://github.com/sbt/sbt-native-packager

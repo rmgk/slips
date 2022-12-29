@@ -16,12 +16,13 @@ object Dependencies {
     val directories        = "26"
     val jetty              = "11.0.12"
     val jol                = "0.16"
-    val jsoniterScalaCore  = "2.19.0"
+    val jsoniterScalaCore  = "2.20.0"
     val jsoniterScalaOld   = "2.13.3.2" // this is the latest version supporting Scala 2.11 (and java 8)
     val jsoup              = "1.15.3"
     val munit              = "1.0.0-M7"
     val normalizecss       = "8.0.1"
     val okHttp             = "4.10.0"
+    val oslib              = "0.9.0"
     val pprint             = "0.8.0"
     val quicklens          = "1.9.0"
     val reactiveStreams    = "1.0.4"
@@ -41,7 +42,7 @@ object Dependencies {
     val scalatestpluscheck = "3.2.14.0"
     val scopt              = "4.1.0"
     val scribe             = "3.10.5"
-    val slips              = "0.4.5"
+    val slips              = "0.4.5+6-045bdee6"
     val sourcecode         = "0.3.0"
     val tomlScala          = "0.2.2"
     val upickle            = "2.0.0"
@@ -61,6 +62,7 @@ object Dependencies {
   val munitScalacheck = Def.setting("org.scalameta" %%% "munit-scalacheck" % V.munit % Test)
   val normalizecss    = Def.setting("org.webjars.npm" % "normalize.css" % V.normalizecss)
   val okHttp          = Def.setting("com.squareup.okhttp3" % "okhttp" % V.okHttp)
+  val oslib           = Def.setting("com.lihaoyi" %%% "os-lib" % V.oslib)
   val pprint          = Def.setting("com.lihaoyi" %%% "pprint" % V.pprint)
   val quicklens       = Def.setting("com.softwaremill.quicklens" %%% "quicklens" % V.quicklens)
   val reactiveStreams = Def.setting("org.reactivestreams" % "reactive-streams" % V.reactiveStreams)

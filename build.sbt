@@ -59,6 +59,12 @@ val scip = crossProject(JSPlatform, JVMPlatform, NativePlatform)
   )
   .dependsOn(delay)
 
+val script = crossProject(JVMPlatform, NativePlatform)
+  .crossType(CrossType.Full).settings(
+    commonSettings,
+  )
+  .dependsOn(delay)
+
 val webview =
   project.settings(
     commonSettings,

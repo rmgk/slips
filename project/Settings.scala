@@ -45,9 +45,11 @@ object Settings {
 
   def settingsFor(version: String) =
     version match {
-      case v if v.startsWith("2.13") => List("-Ytasty-reader")
-      case v if v.startsWith("3.") => List("-feature")
-      case other                     => Nil
+      case v if v.startsWith("2.13") =>
+        List("-Ytasty-reader")
+      case v if v.startsWith("3.") =>
+        List("-feature", "-deprecation", "-language:implicitConversions")
+      case other => Nil
     }
 
   val safeInit = scalacOptions += "-Ysafe-init"
