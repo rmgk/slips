@@ -17,11 +17,14 @@ function callback() {
 }
 setInterval("callback()",1000);
     """)
-    val res = w.bind("outpt", (b) => {
-      println("received:")
-      println(b)
-      b
-    })
+    val res = w.bind(
+      "outpt",
+      b => {
+        println("received:")
+        println(b)
+        b
+      }
+    )
     w.run()
     println(res)
   }

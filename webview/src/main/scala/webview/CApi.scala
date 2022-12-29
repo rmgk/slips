@@ -4,7 +4,7 @@ import scala.scalanative.unsafe.*
 
 @extern
 object CApi {
-  type webview_t = Ptr[Byte]
+  type webview_t        = Ptr[Byte]
   type DispatchCallback = CFuncPtr2[webview_t, Ptr[Byte], Unit]
   type BindCallback     = CFuncPtr3[CString, CString, Ptr[Byte], Unit]
 

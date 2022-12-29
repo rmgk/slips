@@ -8,8 +8,8 @@ import scala.util.Random
 
 @main
 def run() =
-  println(printCode{
-    lazy val List(a, b, c) = List(1,2,3)
+  println(printCode {
+    lazy val List(a, b, c) = List(1, 2, 3)
   })
   inline def res2 = Async {
     val a = Future {

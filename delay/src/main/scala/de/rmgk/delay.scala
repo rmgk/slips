@@ -8,61 +8,65 @@ import scala.quoted.{Expr, Quotes, Type}
 import scala.util.control.NonFatal
 import scala.util.{Failure, Random, Success, Try}
 
-
 /** Work with descriptions of computations that you want to execute later.
- * Delay offers two abstractions [[Sync]] and [[Async]].
- *
- * [[Sync]] which behaves like a function `() => A` its only purpose is to enable much more efficient composition by using macros to transform any [[delay.map]] and [[delay.flatMap]] calls into just sequential code if everything is inlined, while falling back to passing around function pointers if you pass the [[Sync]] as parameters.
- * [[Sync]] is particularly useful for composition of code with side effects.
- *
- * [[Async]] similarly allows composition of asynchronous computations.
- * It behaves similarly to a `(A => Unit) => Unit` (i.e., a function that takes a callback).
- * The purpose of [[Async]] is not only efficiency, but also to provide an alternative syntax to for expressions.
- * Specifically, async blocks allow sequential looking composition of async code:
- * ```
- * Async {
- *   val x = async1.bind
- *   async2.bind
- *   println("output")
- *   val y = async3.bind
- *   x + y
- * }
- * ```
- * Which is roughly equivalent to:
- * ```
- * for {
- *   x <- async1
- *   _ <- async2
- *   y <- {
- *     println("output")
- *     async3
- * } yield { x + y }
- * ```
- * Thus just a bit more regular than for expressions. Note that you may not use bind in any nested expressions, only as the outer method in a single statement, or as the right hand side of a val binding.
- *
- * Note that [[Sync]] and in particular [[Async]] are just abstractions, there is no additional runtime or internal state beyond composition of functions. In particular, [[Async]] has no concept of parallel excution or threads or anything like that. Using [[delay.run]] (and thus at some point [[Async.bind]]) simply executes whatever the code you have written in the async handlers and likely the initial [[AsyncCompanion.fromCallback]].
- *
- * If you need to execute anything on a different thread you can easily do so by using whatever library for threading you fancy. We provide convenience functions to convert to and from [[scala.concurrent.Future]]:
- *
- * ```
- * Async {
- *   async1.runToFuture.map(x => x + 1).toAsync.bind
- * }
- * ```
- *  */
+  * Delay offers two abstractions [[Sync]] and [[Async]].
+  *
+  * [[Sync]] which behaves like a function `() => A` its only purpose is to enable much more efficient composition by using macros to transform any [[delay.map]] and [[delay.flatMap]] calls into just sequential code if everything is inlined, while falling back to passing around function pointers if you pass the [[Sync]] as parameters.
+  * [[Sync]] is particularly useful for composition of code with side effects.
+  *
+  * [[Async]] similarly allows composition of asynchronous computations.
+  * It behaves similarly to a `(A => Unit) => Unit` (i.e., a function that takes a callback).
+  * The purpose of [[Async]] is not only efficiency, but also to provide an alternative syntax to for expressions.
+  * Specifically, async blocks allow sequential looking composition of async code:
+  * ```
+  * Async {
+  *   val x = async1.bind
+  *   async2.bind
+  *   println("output")
+  *   val y = async3.bind
+  *   x + y
+  * }
+  * ```
+  * Which is roughly equivalent to:
+  * ```
+  * for {
+  *   x <- async1
+  *   _ <- async2
+  *   y <- {
+  *     println("output")
+  *     async3
+  * } yield { x + y }
+  * ```
+  * Thus just a bit more regular than for expressions. Note that you may not use bind in any nested expressions, only as the outer method in a single statement, or as the right hand side of a val binding.
+  *
+  * Note that [[Sync]] and in particular [[Async]] are just abstractions, there is no additional runtime or internal state beyond composition of functions. In particular, [[Async]] has no concept of parallel excution or threads or anything like that. Using [[delay.run]] (and thus at some point [[Async.bind]]) simply executes whatever the code you have written in the async handlers and likely the initial [[AsyncCompanion.fromCallback]].
+  *
+  * If you need to execute anything on a different thread you can easily do so by using whatever library for threading you fancy. We provide convenience functions to convert to and from [[scala.concurrent.Future]]:
+  *
+  * ```
+  * Async {
+  *   async1.runToFuture.map(x => x + 1).toAsync.bind
+  * }
+  * ```
+  */
 object delay {
+
   /** Description of a computation that returns an `A` immediately without blocking.
-   * This could be seen as a `() => A` but with an additional `Ctx` to store context information. */
+    * This could be seen as a `() => A` but with an additional `Ctx` to store context information.
+    */
   class Sync[-Ctx, +A](val runInContext: Ctx => A) extends Async[Ctx, A](ctx => cb => cb.succeed(runInContext(ctx)))
 
   /** Companion object of [[Sync]], but with a type parameter to allow fine grained type inference.
-   * This could potentially be simplified if we ever get named type parameters. */
+    * This could potentially be simplified if we ever get named type parameters.
+    */
   class SyncCompanion[Ctx]:
-    /** */
+    /**
+      */
     inline def apply[A](inline run: Ctx ?=> A): Sync[Ctx, A] = new Sync(run(using _))
   inline def Sync[Ctx]: SyncCompanion[Ctx] = new SyncCompanion[Ctx] {}
 
   extension [Ctx, A](inline sync: Sync[Ctx, A]) {
+
     /** Executes the [[Sync]] given a `Ctx`. */
     inline def run(using inline ctx: Ctx): A          = ${ DelayMacros.applyInBlock[Ctx, A]('sync, 'ctx) }
     inline def map[B](inline f: A => B): Sync[Ctx, B] = Sync { f(sync.run) }
@@ -79,8 +83,9 @@ object delay {
   }
 
   /** A description of a computation that returns an `A` at some later point in time.
-   * This could be seen as a `(A => Unit) => Unit` but with error handling and an additional context to store some information threaded through the asynchronous execution.
-   * You probably do not want to execute this directly */
+    * This could be seen as a `(A => Unit) => Unit` but with error handling and an additional context to store some information threaded through the asynchronous execution.
+    * You probably do not want to execute this directly
+    */
   class Async[-Ctx, +A](val handleInCtx: Ctx => Callback[A] => Unit) {
 
     /** Access the value inside an Async block. */
@@ -89,6 +94,7 @@ object delay {
   }
 
   extension [Ctx, A](inline async: Async[Ctx, A]) {
+
     /** Start the underlying computation and pass the result to `cb`. */
     inline def run(inline cb: Callback[A])(using inline ctx: Ctx): Unit =
       ${ DelayMacros.handleInBlock[Ctx, A]('async, 'ctx, 'cb) }
@@ -105,7 +111,8 @@ object delay {
       }
 
     /** Runs `body` after the asynchronous computation is finished.
-     * Useful for running cleanup handlers. */
+      * Useful for running cleanup handlers.
+      */
     inline def after(inline body: Ctx ?=> Either[Throwable, A] => Unit): Async[Ctx, A] =
       Async.fromCallback {
         async.run { res =>
@@ -120,7 +127,8 @@ object delay {
       }
 
     /** Start the underlying computation immediately.
-     * Return a Future of the result. */
+      * Return a Future of the result.
+      */
     inline def runToFuture(using inline ctx: Ctx): Future[A] =
       val p = scala.concurrent.Promise[A]()
       async.run {
@@ -130,7 +138,8 @@ object delay {
       p.future
 
     /** Start the underlying computation immediately.
-     * The result is cached and can be accessed as Async */
+      * The result is cached and can be accessed as Async
+      */
     inline def runToAsync(using inline ctx: Ctx): Async[Ctx, A] =
       val p = new Promise[A]
       async.run(p)
@@ -139,16 +148,18 @@ object delay {
   }
 
   /** Companion object of [[Async]], but with a type parameter to allow fine grained type inference.
-   * This could potentially be simplified if we ever get named type parameters. */
+    * This could potentially be simplified if we ever get named type parameters.
+    */
   trait AsyncCompanion[Ctx] {
+
     /** Create a new [[Async]] from a callback.
-     * `f` is a block that may pass [[handler]] to a callback-based API.
-     * @example ```
-     * Async.fromCallback {
-     *   fut.onComplete(Async.handler.complete(_))
-     * }
-     * ```
-     */
+      * `f` is a block that may pass [[handler]] to a callback-based API.
+      * @example ```
+      * Async.fromCallback {
+      *   fut.onComplete(Async.handler.complete(_))
+      * }
+      * ```
+      */
     inline def fromCallback[A](inline f: Ctx ?=> Callback[A] ?=> Unit): Async[Ctx, A] =
       new Async(ctx => cb => f(using ctx)(using cb))
 
@@ -169,7 +180,8 @@ object delay {
       ${ DelayMacros.asyncImpl[Ctx, A]('{ expr }) }
 
     /** Simple form of resource handling given an `open` and `close` function for some resource.
-     * Makes the resource available inside the async `body` and ensures it is closed as soon as `body` is done (exceptionally or normally). */
+      * Makes the resource available inside the async `body` and ensures it is closed as soon as `body` is done (exceptionally or normally).
+      */
     inline def resource[R, A](inline open: R, inline close: R => Unit)(inline body: Ctx ?=> R => A): Async[Ctx, A] =
       Async[Ctx] {
         val r = open
