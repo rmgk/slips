@@ -18,7 +18,7 @@ class OptionsTest extends munit.FunSuite {
 
     val instance = CliArgs()
 
-    val p   = options.makeParser[CliArgs]("test", instance)
+    val p   = options.makeParser[CliArgs]( instance, _.programName("test"))
     val res = scopt.OParser.parse(p, Seq("42", "--second", "/a/b", "32", "--flagish"), instance)
     assertEquals(res.get.first.value, List(42, 32))
     assertEquals(res.get.second.value, "/a/b")
@@ -35,7 +35,7 @@ class OptionsTest extends munit.FunSuite {
 
     val instance = CliArgsSub()
 
-    val p   = options.makeParser[CliArgsSub]("test", instance)
+    val p   = options.makeParser[CliArgsSub](instance, _.programName("test"))
     val res = scopt.OParser.parse(p, Seq("sub", "42", "--second", "/a/b", "32", "--flagish"), instance)
     assertEquals(res.get.sub.value.get.first.value, List(42, 32))
     assertEquals(res.get.sub.value.get.second.value, "/a/b")

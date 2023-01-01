@@ -16,7 +16,7 @@ object options {
   type Flag[T]   = Boolean
 
   class Argument[T, Occurrences[_], OptStyle <: Style](
-      private[options] val transform: OParser[T, Any] => OParser[T, Any] = identity,
+      private[options] val transform: OParser[T, Any] => OParser[T, Any] = identity[OParser[T, Any]],
       private[options] val default: Option[Occurrences[T]] = None
   ) {
     private[options] val contents: ListBuffer[T]  = ListBuffer.empty
@@ -80,9 +80,8 @@ object options {
           args
         }.children(childParser))
 
-        val nextAcc = (acc: @unchecked) match
-          case None      => end
-          case Some(acc) => end.flatMap(_ => acc)
+
+        val nextAcc = acc.fold(end)(a => a ++ end)
 
         makeParserRec[rargs, rlabels, Args](instance, builder, Some(nextAcc), position + 1)
 
@@ -107,18 +106,16 @@ object options {
 
         val end = currentT().transform(validating)
 
-        val nextAcc = (acc: @unchecked) match
-          case None      => end
-          case Some(acc) => end.flatMap(_ => acc)
+        val nextAcc = acc.fold(end)(a => a ++ end)
 
         makeParserRec[rargs, rlabels, Args](instance, builder, Some(nextAcc), position + 1)
 
-  inline def makeParser[Args <: Product](name: String, instance: Args)(using pm: Mirror.ProductOf[Args]) =
-    val builder = scopt.OParser.builder[Any]
+  inline def makeParser[Args <: Product](instance: Args, init: OParserBuilder[Args] => OParser[Unit, Args] = null)(using pm: Mirror.ProductOf[Args]) =
+    val builder = scopt.OParser.builder[Args]
     makeParserRec[pm.MirroredElemTypes, pm.MirroredElemLabels, Args](
       instance,
-      builder,
-      Some(builder.programName(name)),
+      builder.asInstanceOf,
+      Option(init).map(f => f(builder).asInstanceOf[OParser[_, Any]]),
       0
     )
 
