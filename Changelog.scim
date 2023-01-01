@@ -4,6 +4,8 @@
 
 • Script
 	• convenience for process builder and reading files that works on ScalaNative
+• Options
+	• support subcommands
 
 == v0.4.5
 

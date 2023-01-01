@@ -27,4 +27,21 @@ class OptionsTest extends munit.FunSuite {
     assertEquals(res.get.flagish.value, true)
   }
 
+  case class CliArgsSub(
+      sub: Subcommand[CliArgs] = Subcommand(CliArgs(), _.text("some subcommand"))
+  )
+
+  test("subcommand") {
+
+    val instance = CliArgsSub()
+
+    val p   = options.makeParser[CliArgsSub]("test", instance)
+    val res = scopt.OParser.parse(p, Seq("sub", "42", "--second", "/a/b", "32", "--flagish"), instance)
+    assertEquals(res.get.sub.value.get.first.value, List(42, 32))
+    assertEquals(res.get.sub.value.get.second.value, "/a/b")
+    assertEquals(res.get.sub.value.get.defaulting.value, Some(2, "test"))
+    assertEquals(res.get.sub.value.get.noflag.value, false)
+    assertEquals(res.get.sub.value.get.flagish.value, true)
+  }
+
 }

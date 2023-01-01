@@ -15,9 +15,9 @@ object options {
   type Single[T] = T
   type Flag[T]   = Boolean
 
-  case class Argument[T, Occurrences[_], OptStyle <: Style](
-      transform: OParser[T, Any] => OParser[T, Any] = identity,
-      default: Option[Occurrences[T]] = None
+  class Argument[T, Occurrences[_], OptStyle <: Style](
+      private[options] val transform: OParser[T, Any] => OParser[T, Any] = identity,
+      private[options] val default: Option[Occurrences[T]] = None
   ) {
     private[options] val contents: ListBuffer[T]  = ListBuffer.empty
     private[options] def collectValue(v: T): Unit = contents.addOne(v)
@@ -33,24 +33,69 @@ object options {
 
   }
 
-  inline def makeParserRec[ArgsT <: Tuple, Labels, Args <: Product](
+  class Subcommand[T <: Product](
+      inner: T,
+      private[options] val transform: OParser[Unit, Any] => OParser[Unit, Any],
+      private[options] val subparser: OParser[_, Any]
+  ) {
+    private[options] var isUsed: Boolean = false
+
+    def value: Option[T] = Option.when(isUsed)(inner)
+  }
+
+  object Subcommand {
+    inline def apply[T <: Product](
+        inner: T,
+        transform: OParser[Unit, Any] => OParser[Unit, Any] = identity
+    )(
+        using pm: Mirror.ProductOf[T]
+    ): Subcommand[T] = {
+      val childParser =
+        makeParserRec[pm.MirroredElemTypes, pm.MirroredElemLabels, T](inner, OParser.builder[Any], None, 0)
+      new Subcommand[T](inner, transform, childParser.asInstanceOf)
+    }
+  }
+
+  private inline def makeParserRec[ArgsT <: Tuple, Labels, Args <: Product](
       instance: Args,
-      builder: scopt.OParserBuilder[Args],
-      acc: scopt.OParser[_, Args],
+      builder: scopt.OParserBuilder[Any],
+      acc: Option[scopt.OParser[_, Any]],
       position: Int
   ): scopt.OParser[_, Args] =
+
+    def getCurrent = instance.productElement(position)
+
     inline (erasedValue[ArgsT], erasedValue[Labels]) match
-      case (EmptyTuple, EmptyTuple) => acc
-      case (_: (Argument[τ, occ, sty] *: rargs), (_: (label *: rlabels))) =>
-        def getArg(args: Args) = args.productElement(position).asInstanceOf[Argument[τ, occ, sty]]
+      case (EmptyTuple, EmptyTuple) => acc.get.asInstanceOf[scopt.OParser[_, Args]]
+      case (_: (Subcommand[τ] *: rargs), (_: (label *: rlabels))) =>
+        val subvalue = getCurrent.asInstanceOf[Subcommand[τ]]
+
+        val childParser = subvalue.subparser
 
         val name = constValue[label].asInstanceOf[String]
-        val start: scopt.OParser[τ, Args] = inline erasedValue[sty] match
+
+        val end = subvalue.transform(builder.cmd(name).action { (_, args) =>
+          val inst = subvalue
+          inst.isUsed = true
+          args
+        }.children(childParser))
+
+        val nextAcc = (acc: @unchecked) match
+          case None      => end
+          case Some(acc) => end.flatMap(_ => acc)
+
+        makeParserRec[rargs, rlabels, Args](instance, builder, Some(nextAcc), position + 1)
+
+      case (_: (Argument[τ, occ, sty] *: rargs), (_: (label *: rlabels))) =>
+        def currentT() = getCurrent.asInstanceOf[Argument[τ, occ, sty]]
+
+        val name = constValue[label].asInstanceOf[String]
+        val start: scopt.OParser[τ, Any] = inline erasedValue[sty] match
           case _: Style.Named      => builder.opt[τ](name)(using summonInline[Read[τ]])
           case _: Style.Positional => builder.arg[τ](s"<$name>")(using summonInline[Read[τ]])
 
         val middle = start.action { (c, args) =>
-          getArg(args).collectValue(c)
+          currentT().collectValue(c)
           args
         }
 
@@ -58,14 +103,23 @@ object options {
           case _: List[τ]   => middle.unbounded()
           case _: Option[τ] => middle.optional()
           case _: Flag[τ]   => middle.optional()
-          case _: Single[τ] => if getArg(instance).default.isEmpty then middle.minOccurs(1) else middle
+          case _: Single[τ] => if currentT().default.isEmpty then middle.minOccurs(1) else middle
 
-        val end = getArg(instance).transform(validating.asInstanceOf).asInstanceOf[OParser[_, Args]]
+        val end = currentT().transform(validating)
 
-        makeParserRec[rargs, rlabels, Args](instance, builder, end.flatMap(_ => acc), position + 1)
+        val nextAcc = (acc: @unchecked) match
+          case None      => end
+          case Some(acc) => end.flatMap(_ => acc)
+
+        makeParserRec[rargs, rlabels, Args](instance, builder, Some(nextAcc), position + 1)
 
   inline def makeParser[Args <: Product](name: String, instance: Args)(using pm: Mirror.ProductOf[Args]) =
-    val builder = scopt.OParser.builder[Args]
-    makeParserRec[pm.MirroredElemTypes, pm.MirroredElemLabels, Args](instance, builder, builder.programName(name), 0)
+    val builder = scopt.OParser.builder[Any]
+    makeParserRec[pm.MirroredElemTypes, pm.MirroredElemLabels, Args](
+      instance,
+      builder,
+      Some(builder.programName(name)),
+      0
+    )
 
 }
