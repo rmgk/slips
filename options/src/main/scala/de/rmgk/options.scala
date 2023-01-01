@@ -6,6 +6,7 @@ import scala.annotation.targetName
 import scala.collection.mutable.ListBuffer
 import scala.compiletime.{constValue, erasedValue, summonAll, summonInline}
 import scala.deriving.Mirror
+import scala.reflect.ClassTag
 
 object options {
   enum Style:
@@ -96,7 +97,7 @@ object options {
         val middle = start.action { (c, args) =>
           currentT().collectValue(c)
           args
-        }
+        }.valueName(s"<${summonInline[ClassTag[τ]].runtimeClass.getSimpleName}>")
 
         val validating = inline erasedValue[occ[τ]] match
           case _: List[τ]   => middle.unbounded()
