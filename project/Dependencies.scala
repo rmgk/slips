@@ -1,10 +1,10 @@
 /* This file is shared between multiple projects
  * and may contain unused dependencies */
 
-import org.portablescala.sbtplatformdeps.PlatformDepsPlugin.autoImport._
-import sbt._
-import Settings.{`is 3`, `is 2.11`}
-import sbt.Keys._
+import org.portablescala.sbtplatformdeps.PlatformDepsPlugin.autoImport.*
+import sbt.*
+import Settings.{`is 2.11`, `is 3`}
+import sbt.Keys.*
 
 object Dependencies {
 
@@ -12,11 +12,11 @@ object Dependencies {
     val betterFiles        = "3.9.1"
     val catsCore           = "2.6.1"
     val circeCore          = "0.14.3"
-    val decline            = "2.4.0"
+    val decline            = "2.4.1"
     val directories        = "26"
-    val jetty              = "11.0.12"
+    val jetty              = "11.0.13"
     val jol                = "0.16"
-    val jsoniterScalaCore  = "2.20.0"
+    val jsoniterScalaCore  = "2.20.1"
     val jsoniterScalaOld   = "2.13.3.2" // this is the latest version supporting Scala 2.11 (and java 8)
     val jsoup              = "1.15.3"
     val munit              = "1.0.0-M7"
@@ -29,7 +29,7 @@ object Dependencies {
     val retypecheck        = "0.10.0"
     val scala211           = "2.11.12"
     val scala212           = "2.12.17"
-    val scala213           = "2.13.8"
+    val scala213           = "2.13.10"
     val scala3             = "3.2.1"
     val scalaJavaTime      = "2.3.0"
     val scalaLoci          = "5df6d12a45"
@@ -42,13 +42,13 @@ object Dependencies {
     val scalatestpluscheck = "3.2.14.0"
     val scopt              = "4.1.0"
     val scribe             = "3.10.5"
-    val slips              = "0.4.5+6-045bdee6"
+    val slips              = "1d6fa95509"
     val sourcecode         = "0.3.0"
     val tomlScala          = "0.2.2"
     val upickle            = "2.0.0"
   }
 
-  import Dependencies.{Versions => V}
+  import Dependencies.Versions as V
 
   val betterFiles =
     Def.setting(("com.github.pathikrit" %% "better-files" % V.betterFiles).cross(CrossVersion.for3Use2_13))
@@ -112,6 +112,7 @@ object Dependencies {
     val logging  = Def.setting("de.rmgk.slips" %%% "logging" % V.slips)
     val options  = Def.setting("de.rmgk.slips" %%% "options" % V.slips)
     val scip     = Def.setting("de.rmgk.slips" %%% "scip" % V.slips)
+    val script   = Def.setting("de.rmgk.slips" %%% "script" % V.slips)
   }
 
   object loci {
