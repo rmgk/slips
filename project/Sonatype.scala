@@ -5,7 +5,7 @@ object Tools {
 // use `publishSigned` to publish
 // go to https://s01.oss.sonatype.org/#stagingRepositories to move from staging to maven central
   val publishSonatype = Def.settings(
-    organization         := "de.rmgk",
+    organization         := "de.rmgk.slips",
     organizationName     := "rmgk",
     organizationHomepage := Some(url("https://github.com/rmgk/")),
     homepage             := Some(url("https://github.com/rmgk/slips/")),
