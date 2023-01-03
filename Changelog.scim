@@ -1,11 +1,12 @@
 = Changelog
 
-== v0.next
+== v0.4.6
 
 • Script
 	• convenience for process builder and reading files that works on ScalaNative
 • Options
 	• support subcommands
+• Experiment with publishing to maven central
 
 == v0.4.5
 
