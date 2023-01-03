@@ -32,7 +32,7 @@ class WebView private (val w: webview_t) {
 }
 
 object WebView {
-  def apply() = new WebView(webview_create(1, null))
+  def apply() = new WebView(webview_create(1, null.asInstanceOf))
 
   // weird indirections because callbacks should not be GCed
   class CBDesc(name: String, val handler: String => String, val view: webview_t) {

@@ -51,10 +51,13 @@ object RunnableParts {
     new RunnableParts {
       override def parts = p.flatMap(x => conv(x).parts)
     }
+
+  given seqIdRunnable: Conversion[Seq[RunnableParts], RunnableParts] = seqRunnable(using identity)
 }
 
 extension (pb: ProcessBuilder)
   def runResult(): Either[Int, String] = {
+    import scala.language.unsafeNulls
     val process = pb
       .inheritIO().redirectOutput(Redirect.PIPE)
       .start()
@@ -65,11 +68,12 @@ extension (pb: ProcessBuilder)
     else Right(Using(process.getInputStream)(streamToString).get)
   }
   def run(): String =
-    pb.runResult().toOption.get
+    pb.runResult().toOption.getOrElse("")
 
 extension (sc: StringContext)
   def process(args: RunnableParts*): ProcessBuilder = {
     val components = sc.parts.iterator.zipAll(args, "", List.empty[String]: RunnableParts).flatMap { (part, arg) =>
+      import scala.language.unsafeNulls
       part.split("\\s").iterator.concat(arg.parts)
     }.filter(s => !s.isBlank).toVector
     new ProcessBuilder(components.asJava)

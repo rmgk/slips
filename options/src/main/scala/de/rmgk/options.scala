@@ -9,6 +9,14 @@ import scala.deriving.Mirror
 import scala.reflect.ClassTag
 
 object options {
+
+  inline def parseCli[T <: Product: Mirror.ProductOf](
+      instance: T,
+      args: Seq[String],
+      init: (OParserBuilder[T] => OParser[Unit, T]) | Null = null
+  ): Option[T] =
+    OParser.parse(makeParser(instance, init), args, instance)
+
   enum Style:
     case Named()
     case Positional()
@@ -113,14 +121,14 @@ object options {
 
         makeParserRec[rargs, rlabels, Args](instance, builder, Some(nextAcc), position + 1)
 
-  inline def makeParser[Args <: Product](instance: Args, init: OParserBuilder[Args] => OParser[Unit, Args] = null)(using
+  inline def makeParser[Args <: Product](instance: Args, init: (OParserBuilder[Args] => OParser[Unit, Args]) | Null = null)(using
       pm: Mirror.ProductOf[Args]
-  ) =
+  ): OParser[_, Args] =
     val builder = scopt.OParser.builder[Args]
     makeParserRec[pm.MirroredElemTypes, pm.MirroredElemLabels, Args](
       instance,
       builder.asInstanceOf,
-      Option(init).map(f => f(builder).asInstanceOf[OParser[_, Any]]),
+      if init == null then None else Some(init(builder).asInstanceOf[OParser[_, Any]]),
       0
     ).get
 

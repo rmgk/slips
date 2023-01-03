@@ -203,8 +203,8 @@ object delay {
     inline def toAsync: Async[Ctx, T] =
       Async.fromCallback {
         cs.handle { (res, ex) =>
-          if !isNull(ex) then Async.handler.fail(ex)
-          else if !isNull(res) then Async.handler.succeed(res)
+          if null != ex then Async.handler.fail(ex)
+          else if null != res then Async.handler.succeed(res)
           else Async.handler.fail(IllegalStateException("completion stage returned nothing without failure"))
         }
       }

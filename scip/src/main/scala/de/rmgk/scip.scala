@@ -17,6 +17,10 @@ object scip {
 
   trait ScipEx extends ControlThrowable
 
+  extension (inline s: String) private inline def getU8Bytes: Array[Byte] =
+    import scala.language.unsafeNulls
+    s.getBytes(StandardCharsets.UTF_8)
+
   case class Scx(
       val input: Array[Byte],
       var index: Int,
@@ -91,6 +95,7 @@ object scip {
 
   object Scx {
     def apply(s: String): Scx =
+      import scala.language.unsafeNulls
       val b = s.getBytes(UTF_8)
       Scx(b, index = 0, maxpos = b.length, depth = 0, lastFail = -1, tracing = true)
   }
@@ -277,11 +282,11 @@ object scip {
   }
 
   inline def seq(inline b: String): Scip[Boolean] =
-    val bytes = b.getBytes(StandardCharsets.UTF_8)
+    val bytes = b.getU8Bytes
     seq(bytes)
   inline def seq(b: Array[Byte]): Scip[Boolean] = Scip { scx.contains(b) && { scx.index += b.length; true } }
   inline def alt(inline b: String): Scip[Boolean] =
-    val bytes = b.getBytes(StandardCharsets.UTF_8)
+    val bytes = b.getU8Bytes
     alt(bytes)
   inline def alt(b: Array[Byte]): Scip[Boolean] = Scip {
     scx.available(1) && {
@@ -296,8 +301,8 @@ object scip {
       s.value match
         case None =>
           report.warning(s"value is not constant", s)
-          '{ seq($s.getBytes(UTF_8)) }
-        case Some(v) => bytesMatchImpl(v.getBytes(UTF_8))
+          '{ seq($s.getU8Bytes) }
+        case Some(v) => bytesMatchImpl(v.getU8Bytes)
 
     def bytesMatchImpl(bytes: Array[Byte])(using quotes: Quotes): Expr[Scip[Boolean]] = {
       import quotes.reflect.*
@@ -322,7 +327,7 @@ object scip {
         case None =>
           report.errorAndAbort(s"value is not constant", s)
         case Some(v) =>
-          val bytes = v.map(_.toString.getBytes(UTF_8).toSeq)
+          val bytes = v.map(_.toString.getU8Bytes.toSeq)
           bytesAltImpl(trieFromBytes(bytes))
 
     case class MiniTrie(elems: Seq[Byte], children: Map[Byte, MiniTrie])

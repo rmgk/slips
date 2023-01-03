@@ -5,6 +5,8 @@ import de.rmgk.delay.{Async, toAsync}
 import java.lang.ProcessBuilder.Redirect
 import scala.util.Using
 
+import scala.language.unsafeNulls
+
 extension (pb: ProcessBuilder)
   def asyncResult: Async[Any, Either[Int, String]] = Async {
     val process = pb

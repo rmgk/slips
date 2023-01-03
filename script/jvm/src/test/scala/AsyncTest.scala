@@ -1,5 +1,5 @@
 import de.rmgk.script.{RunnableParts, asyncResult, process}
-import de.rmgk.delay.Async
+import de.rmgk.delay.{Async, runToFuture}
 
 import java.io.IOException
 import java.nio.file.Paths
@@ -9,7 +9,7 @@ import concurrent.ExecutionContext.Implicits.global
 class AsyncTest extends munit.FunSuite {
   test("list files") {
     Async {
-      val path = Paths.get(".").toAbsolutePath
+      val path = Paths.get(".").nn.toAbsolutePath
       val res  = process"ls ${path.toString}".asyncResult.bind
       assert(res.isRight)
     }.runToFuture
@@ -28,11 +28,12 @@ class AsyncTest extends munit.FunSuite {
   }
 
   test("sequence arguments") {
-    Async {
+    Async[Unit] {
+      import scala.language.unsafeNulls
       val path = Paths.get(".").toAbsolutePath
       val res  = process"${List[RunnableParts]("ls", path)}".asyncResult.bind
       assert(res.isRight)
-    }.runToFuture
+    }.runToFuture(using ())
   }
 
 }

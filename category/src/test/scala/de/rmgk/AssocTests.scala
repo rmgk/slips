@@ -6,7 +6,10 @@ import org.scalacheck.Prop.*
 
 class AssocTests extends munit.FunSuite {
   val text  = """Eins zwei zwei drei drei drei"""
-  val words = text.split("\\W+").map(_.toLowerCase)
+  val words = {
+    import scala.language.unsafeNulls
+    text.split("\\W+").map(_.toLowerCase)
+  }
 
   case class Sum(value: Int)
 
