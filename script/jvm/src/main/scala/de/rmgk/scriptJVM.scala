@@ -1,6 +1,6 @@
 package de.rmgk.script
 
-import de.rmgk.delay.{Async, toAsync}
+import de.rmgk.delay.{Async, extensions}
 
 import java.lang.ProcessBuilder.Redirect
 import scala.util.Using

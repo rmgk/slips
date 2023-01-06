@@ -65,14 +65,6 @@ object delay {
     inline def apply[A](inline run: Ctx ?=> A): Sync[Ctx, A] = new Sync(run(using _))
   inline def Sync[Ctx]: SyncCompanion[Ctx] = new SyncCompanion[Ctx] {}
 
-  extension [Ctx, A](inline sync: Sync[Ctx, A]) {
-
-    /** Executes the [[Sync]] given a `Ctx`. */
-    inline def run(using inline ctx: Ctx): A          = ${ DelayMacros.applyInBlock[Ctx, A]('sync, 'ctx) }
-    inline def map[B](inline f: A => B): Sync[Ctx, B] = Sync { f(sync.run) }
-    inline def flatMap[B](inline f: A => Sync[Ctx, B]): Sync[Ctx, B] = Sync { f(sync.run).run }
-  }
-
   /** A callback that also handles failure. */
   @FunctionalInterface
   trait Callback[-A] {
@@ -91,60 +83,6 @@ object delay {
     /** Access the value inside an Async block. */
     @compileTimeOnly("bind must be used inside Async and may not be nested inside of expressions")
     def bind: A = ???
-  }
-
-  extension [Ctx, A](inline async: Async[Ctx, A]) {
-
-    /** Start the underlying computation and pass the result to `cb`. */
-    inline def run(inline cb: Callback[A])(using inline ctx: Ctx): Unit =
-      ${ DelayMacros.handleInBlock[Ctx, A]('async, 'ctx, 'cb) }
-    inline def map[B](inline f: A => B): Async[Ctx, B] =
-      async.flatMap { a => Sync { f(a) } }
-    inline def flatMap[B](inline f: A => Async[Ctx, B]): Async[Ctx, B] =
-      Async.fromCallback {
-        async.run {
-          case Right(a) =>
-            try delay.run(f(a))(Async.handler)
-            catch case e if NonFatal(e) => Async.handler.fail(e)
-          case Left(err) => Async.handler.fail(err)
-        }
-      }
-
-    /** Runs `body` after the asynchronous computation is finished.
-      * Useful for running cleanup handlers.
-      */
-    inline def after(inline body: Ctx ?=> Either[Throwable, A] => Unit): Async[Ctx, A] =
-      Async.fromCallback {
-        async.run { res =>
-          try
-            body(res)
-            Async.handler.complete(res)
-          catch
-            case e if NonFatal(e) =>
-              res.swap.foreach(e.addSuppressed)
-              Async.handler.fail(e)
-        }
-      }
-
-    /** Start the underlying computation immediately.
-      * Return a Future of the result.
-      */
-    inline def runToFuture(using inline ctx: Ctx): Future[A] =
-      val p = scala.concurrent.Promise[A]()
-      async.run {
-        case Left(e)  => p.failure(e)
-        case Right(v) => p.success(v)
-      }
-      p.future
-
-    /** Start the underlying computation immediately.
-      * The result is cached and can be accessed as Async
-      */
-    inline def runToAsync(using inline ctx: Ctx): Async[Ctx, A] =
-      val p = new Promise[A]
-      async.run(p)
-      p.async
-
   }
 
   /** Companion object of [[Async]], but with a type parameter to allow fine grained type inference.
@@ -192,24 +130,6 @@ object delay {
   /** Syntactic convenience to enable type inference of `Ctx`. */
   inline def Async[Ctx]: AsyncCompanion[Ctx] = new AsyncCompanion[Ctx] {}
 
-  extension [A](inline fut: Future[A]) {
-    inline def toAsync(using inline ec: ExecutionContext): Async[Any, A] =
-      Async.fromCallback {
-        fut.onComplete(Async.handler.complete(_))
-      }
-  }
-
-  extension [Ctx, T](inline cs: CompletionStage[T]) {
-    inline def toAsync: Async[Ctx, T] =
-      Async.fromCallback {
-        cs.handle { (res, ex) =>
-          if null != ex then Async.handler.fail(ex)
-          else if null != res then Async.handler.succeed(res)
-          else Async.handler.fail(IllegalStateException("completion stage returned nothing without failure"))
-        }
-      }
-  }
-
   /** Simple promise implementation synchronizing on the object monitor. */
   class Promise[T] extends Callback[T] {
     @volatile private var value: Option[Either[Throwable, T]] = None
@@ -231,6 +151,89 @@ object delay {
     }
 
     val async: Async[Any, T] = new Async(handler)
+  }
+
+  given extensions: Object with {
+
+    extension [Ctx, A](inline sync: Sync[Ctx, A]) {
+
+      /** Executes the [[Sync]] given a `Ctx`. */
+      inline def run(using inline ctx: Ctx): A          = ${ DelayMacros.applyInBlock[Ctx, A]('sync, 'ctx) }
+      inline def map[B](inline f: A => B): Sync[Ctx, B] = Sync { f(sync.run) }
+      inline def flatMap[B](inline f: A => Sync[Ctx, B]): Sync[Ctx, B] = Sync { f(sync.run).run }
+    }
+
+    extension [Ctx, A](inline async: Async[Ctx, A]) {
+
+      /** Start the underlying computation and pass the result to `cb`. */
+      inline def run(inline cb: Callback[A])(using inline ctx: Ctx): Unit =
+        ${ DelayMacros.handleInBlock[Ctx, A]('async, 'ctx, 'cb) }
+      inline def map[B](inline f: A => B): Async[Ctx, B] =
+        async.flatMap { a => Sync { f(a) } }
+      inline def flatMap[B](inline f: A => Async[Ctx, B]): Async[Ctx, B] =
+        Async.fromCallback {
+          async.run {
+            case Right(a) =>
+              try extensions.run(f(a))(Async.handler)
+              catch case e if NonFatal(e) => Async.handler.fail(e)
+            case Left(err) => Async.handler.fail(err)
+          }
+        }
+
+      /** Runs `body` after the asynchronous computation is finished.
+        * Useful for running cleanup handlers.
+        */
+      inline def after(inline body: Ctx ?=> Either[Throwable, A] => Unit): Async[Ctx, A] =
+        Async.fromCallback {
+          async.run { res =>
+            try
+              body(res)
+              Async.handler.complete(res)
+            catch
+              case e if NonFatal(e) =>
+                res.swap.foreach(e.addSuppressed)
+                Async.handler.fail(e)
+          }
+        }
+
+      /** Start the underlying computation immediately.
+        * Return a Future of the result.
+        */
+      inline def runToFuture(using inline ctx: Ctx): Future[A] =
+        val p = scala.concurrent.Promise[A]()
+        async.run {
+          case Left(e)  => p.failure(e)
+          case Right(v) => p.success(v)
+        }
+        p.future
+
+      /** Start the underlying computation immediately.
+        * The result is cached and can be accessed as Async
+        */
+      inline def runToAsync(using inline ctx: Ctx): Async[Ctx, A] =
+        val p = new Promise[A]
+        async.run(p)
+        p.async
+
+    }
+
+    extension [A](inline fut: Future[A]) {
+      inline def toAsync(using inline ec: ExecutionContext): Async[Any, A] =
+        Async.fromCallback {
+          fut.onComplete(Async.handler.complete(_))
+        }
+    }
+
+    extension [Ctx, T](inline cs: CompletionStage[T]) {
+      inline def toAsync: Async[Ctx, T] =
+        Async.fromCallback {
+          cs.handle { (res, ex) =>
+            if null != ex then Async.handler.fail(ex)
+            else if null != res then Async.handler.succeed(res)
+            else Async.handler.fail(IllegalStateException("completion stage returned nothing without failure"))
+          }
+        }
+    }
   }
 
   object DelayMacros {

@@ -1,6 +1,6 @@
 package de.rmgk
 
-import de.rmgk.delay.*
+import de.rmgk.delay.{Async, Sync, extensions}
 
 import scala.concurrent.ExecutionContext.global
 import scala.concurrent.Future
@@ -8,9 +8,6 @@ import scala.util.Random
 
 @main
 def run() =
-  println(printCode {
-    lazy val List(a, b, c) = List(1, 2, 3)
-  })
   inline def res2 = Async {
     val a = Future {
       println(s"running future")

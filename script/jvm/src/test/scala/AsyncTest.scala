@@ -1,5 +1,5 @@
 import de.rmgk.script.{RunnableParts, extensions, jvmExtensions}
-import de.rmgk.delay.{Async, runToFuture}
+import de.rmgk.delay.{Async, extensions}
 
 import java.io.IOException
 import java.nio.file.Paths
