@@ -14,58 +14,49 @@ val commonSettings = Def.settings(
 )
 
 val logging = crossProject(JSPlatform, JVMPlatform, NativePlatform)
-  .crossType(CrossType.Pure).settings(
+  .crossType(CrossType.Pure)
+  .settings(
     commonSettings,
     commonCrossBuildVersions,
     libraryDependencies += sourcecode.value,
   )
 
 val chain = crossProject(JSPlatform, JVMPlatform, NativePlatform)
-  .crossType(CrossType.Pure).settings(
-    commonSettings,
-  )
+  .crossType(CrossType.Pure)
+  .settings(commonSettings)
 
 val category = crossProject(JSPlatform, JVMPlatform, NativePlatform)
-  .crossType(CrossType.Pure).settings(
-    commonSettings,
-  )
+  .crossType(CrossType.Pure)
+  .settings(commonSettings)
 
 val options = crossProject(JSPlatform, JVMPlatform, NativePlatform)
-  .crossType(CrossType.Pure).settings(
-    commonSettings,
-    libraryDependencies += scopt.value,
-  )
+  .crossType(CrossType.Pure)
+  .settings(commonSettings, libraryDependencies += scopt.value)
   .jsSettings(
     // seems to be required to run JS tests on node
     Test / scalaJSLinkerConfig ~= { _.withModuleKind(ModuleKind.CommonJSModule) }
   )
 
 val datalog = crossProject(JSPlatform, JVMPlatform, NativePlatform)
-  .crossType(CrossType.Pure).settings(
-    commonSettings,
-    noPublish
-  )
+  .crossType(CrossType.Pure)
+  .settings(commonSettings, noPublish)
 
 val resource = crossProject(JSPlatform, JVMPlatform, NativePlatform)
-  .crossType(CrossType.Pure).settings(
-    commonSettings
-  )
+  .crossType(CrossType.Pure)
+  .settings(commonSettings)
 
 val delay = crossProject(JSPlatform, JVMPlatform, NativePlatform)
-  .crossType(CrossType.Pure).settings(
-    commonSettings
-  )
+  .crossType(CrossType.Pure)
+  .settings(commonSettings)
 
 val scip = crossProject(JSPlatform, JVMPlatform, NativePlatform)
-  .crossType(CrossType.Pure).settings(
-    commonSettings,
-  )
+  .crossType(CrossType.Pure)
+  .settings(commonSettings)
   .dependsOn(delay)
 
 val script = crossProject(JVMPlatform, NativePlatform)
-  .crossType(CrossType.Full).settings(
-    commonSettings,
-  )
+  .crossType(CrossType.Full)
+  .settings(commonSettings)
   .dependsOn(delay)
 
 val webview =
