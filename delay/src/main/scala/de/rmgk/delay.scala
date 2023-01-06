@@ -11,7 +11,7 @@ import scala.util.{Failure, Random, Success, Try}
 /** Work with descriptions of computations that you want to execute later.
   * Delay offers two abstractions [[Sync]] and [[Async]].
   *
-  * [[Sync]] which behaves like a function `() => A` its only purpose is to enable much more efficient composition by using macros to transform any [[delay.map]] and [[delay.flatMap]] calls into just sequential code if everything is inlined, while falling back to passing around function pointers if you pass the [[Sync]] as parameters.
+  * [[Sync]] which behaves like a function `() => A` its only purpose is to enable much more efficient composition by using macros to transform any [[delay.extensions.map]] and [[delay.extensions.flatMap]] calls into just sequential code if everything is inlined, while falling back to passing around function pointers if you pass the [[Sync]] as parameters.
   * [[Sync]] is particularly useful for composition of code with side effects.
   *
   * [[Async]] similarly allows composition of asynchronous computations.
@@ -39,7 +39,7 @@ import scala.util.{Failure, Random, Success, Try}
   * ```
   * Thus just a bit more regular than for expressions. Note that you may not use bind in any nested expressions, only as the outer method in a single statement, or as the right hand side of a val binding.
   *
-  * Note that [[Sync]] and in particular [[Async]] are just abstractions, there is no additional runtime or internal state beyond composition of functions. In particular, [[Async]] has no concept of parallel excution or threads or anything like that. Using [[delay.run]] (and thus at some point [[Async.bind]]) simply executes whatever the code you have written in the async handlers and likely the initial [[AsyncCompanion.fromCallback]].
+  * Note that [[Sync]] and in particular [[Async]] are just abstractions, there is no additional runtime or internal state beyond composition of functions. In particular, [[Async]] has no concept of parallel excution or threads or anything like that. Using [[delay.extensions.run]] (and thus at some point [[Async.bind]]) simply executes whatever the code you have written in the async handlers and likely the initial [[AsyncCompanion.fromCallback]].
   *
   * If you need to execute anything on a different thread you can easily do so by using whatever library for threading you fancy. We provide convenience functions to convert to and from [[scala.concurrent.Future]]:
   *
@@ -104,7 +104,7 @@ object delay {
     /** Use inside a [[fromCallback]] */
     inline def handler[A](using cb: Callback[A]): Callback[A] = cb
 
-    /** Main async syntax. The body `expr` is not executed until the returned [[Async]] is started with [[delay.run]] or one of the variants. Any exceptions raised in `expr` are forwarded to the handler of the async run. */
+    /** Main async syntax. The body `expr` is not executed until the returned [[Async]] is started with [[delay.extensions.run]] or one of the variants. Any exceptions raised in `expr` are forwarded to the handler of the async run. */
     inline def apply[A](inline expr: Ctx ?=> A): Async[Ctx, A] =
       new Async[Ctx, A](ctx =>
         cb => {

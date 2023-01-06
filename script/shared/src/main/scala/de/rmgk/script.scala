@@ -34,18 +34,7 @@ def streamToString(in: InputStream): String = {
   bo.toString(StandardCharsets.UTF_8)
 }
 
-abstract class RunnableParts {
-  def parts: IterableOnce[String]
-}
-
-object RunnableParts {
-  given toStringRunnable: Conversion[String | Int | Long | Path, RunnableParts] = s =>
-    new RunnableParts { override def parts = List(s.toString) }
-  given seqRunnable[A](using conv: Conversion[A, RunnableParts]): Conversion[Seq[A], RunnableParts] = p =>
-    new RunnableParts { override def parts = p.flatMap(x => conv(x).parts) }
-
-  given seqIdRunnable: Conversion[Seq[RunnableParts], RunnableParts] = seqRunnable(using identity)
-}
+type CommandPart = String | Path | Long | Int | Char
 
 given extensions: Object with
   extension (path: Path)
@@ -66,12 +55,16 @@ given extensions: Object with
     }
     def run(): String =
       pb.runResult().toOption.getOrElse("")
+    def runPrint(): Unit = println(run())
 
   extension (sc: StringContext)
-    def process(args: RunnableParts*): ProcessBuilder = {
-      val components = sc.parts.iterator.zipAll(args, "", List.empty[String]: RunnableParts).flatMap { (part, arg) =>
+    def process(args: (CommandPart | Seq[CommandPart])*): ProcessBuilder = {
+      val components = sc.parts.iterator.zipAll(args, "", List.empty[String]).flatMap { (part, arg) =>
         import scala.language.unsafeNulls
-        part.split("\\s").iterator.concat(arg.parts)
+        val parts = arg match
+          case s: Seq[_]          => s.map(_.toString)
+          case other: CommandPart => Seq(other.toString())
+        part.split("\\s").iterator.concat(parts)
       }.filter(s => !s.isBlank).toVector
       new ProcessBuilder(components.asJava)
     }

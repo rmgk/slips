@@ -1,4 +1,4 @@
-import de.rmgk.script.{extensions, RunnableParts}
+import de.rmgk.script.{extensions}
 
 import java.io.IOException
 import java.nio.file.Paths
@@ -22,7 +22,7 @@ class BasicTests extends munit.FunSuite {
   test("sequence arguments") {
     import scala.language.unsafeNulls
     val path = Paths.get(".").toAbsolutePath
-    val res  = process"${List[RunnableParts]("ls", path)}".runResult()
+    val res  = process"${List("ls", path)}".runResult()
     assert(res.isRight)
   }
 

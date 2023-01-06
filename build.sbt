@@ -9,7 +9,7 @@ val commonSettings = Def.settings(
   organization := "de.rmgk.slips",
   scalaVersion_3,
   libraryDependencies ++= List(munit.value, munitScalacheck.value),
-  explicitNulls,
+  explicitNulls(Compile),
   publishSonatype
 )
 

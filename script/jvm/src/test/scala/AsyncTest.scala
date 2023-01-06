@@ -1,4 +1,4 @@
-import de.rmgk.script.{RunnableParts, extensions, jvmExtensions}
+import de.rmgk.script.{extensions, jvmExtensions}
 import de.rmgk.delay.{Async, extensions}
 
 import java.io.IOException
@@ -31,7 +31,7 @@ class AsyncTest extends munit.FunSuite {
     Async[Unit] {
       import scala.language.unsafeNulls
       val path = Paths.get(".").toAbsolutePath
-      val res  = process"${List[RunnableParts]("ls", path)}".asyncResult.bind
+      val res  = process"${List("ls", path)}".asyncResult.bind
       assert(res.isRight)
     }.runToFuture(using ())
   }
