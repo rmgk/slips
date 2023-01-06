@@ -38,6 +38,13 @@ object Settings {
     }
   )
 
+  val explicitNulls = Seq(
+    scalacOptions ++= {
+      val version = CrossVersion.partialVersion(scalaVersion.value).get
+      cond(version._1 == 3, "-Yexplicit-nulls")
+    }
+  )
+
   val commonScalacOptions = fatalWarnings ++ featureOptions
 
   // see https://www.scala-js.org/news/2021/12/10/announcing-scalajs-1.8.0/#the-default-executioncontextglobal-is-now-deprecated
