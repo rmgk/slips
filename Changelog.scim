@@ -1,5 +1,12 @@
 = Changelog
 
+== v0.next
+
+• use implicit object to store extensions to reduce namespace pollution
+
+• Script
+	• enable more RunnableParts
+
 == v0.4.6
 
 • Script
