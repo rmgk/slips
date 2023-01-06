@@ -7,14 +7,15 @@ import scala.util.Using
 
 import scala.language.unsafeNulls
 
-extension (pb: ProcessBuilder)
-  def asyncResult: Async[Any, Either[Int, String]] = Async {
-    val process = pb
-      .inheritIO().redirectOutput(Redirect.PIPE)
-      .start().onExit().toAsync.bind
-    val code = process.exitValue()
+given jvmExtensions: Object with
+  extension (pb: ProcessBuilder)
+    def asyncResult: Async[Any, Either[Int, String]] = Async {
+      val process = pb
+        .inheritIO().redirectOutput(Redirect.PIPE)
+        .start().onExit().toAsync.bind
+      val code = process.exitValue()
 
-    if code != 0
-    then Left(code)
-    else Right(Using(process.getInputStream)(streamToString).get)
-  }
+      if code != 0
+      then Left(code)
+      else Right(Using(process.getInputStream)(streamToString).get)
+    }

@@ -1,4 +1,4 @@
-import de.rmgk.script.{RunnableParts, asyncResult, process}
+import de.rmgk.script.{RunnableParts, extensions, jvmExtensions}
 import de.rmgk.delay.{Async, runToFuture}
 
 import java.io.IOException
