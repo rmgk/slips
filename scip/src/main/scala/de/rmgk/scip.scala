@@ -17,9 +17,10 @@ object scip {
 
   trait ScipEx extends ControlThrowable
 
-  extension (inline s: String) private inline def getU8Bytes: Array[Byte] =
-    import scala.language.unsafeNulls
-    s.getBytes(StandardCharsets.UTF_8)
+  extension (inline s: String)
+    private inline def getU8Bytes: Array[Byte] =
+      import scala.language.unsafeNulls
+      s.getBytes(StandardCharsets.UTF_8)
 
   case class Scx(
       val input: Array[Byte],
@@ -39,9 +40,9 @@ object scip {
     def str(l: Int, r: Int) = new String(input, l, math.min(r, maxpos) - l, UTF_8)
 
     def contains(bytes: Array[Byte]): Boolean =
-      val len = bytes.length
-      available(len) || { return false }
-      @tailrec def rec(i: Int): Boolean = i >= len || bytes(i) == input(index + i) && rec(i + 1); rec(0)
+      val len                           = bytes.length
+      @tailrec def rec(i: Int): Boolean = i >= len || bytes(i) == input(index + i) && rec(i + 1)
+      available(len) && rec(0)
       // java.util.Arrays.equals(bytes, 0, bytes.length, input, index, math.min(index + bytes.length, maxpos))
 
     def available(min: Int): Boolean    = maxpos >= index + min
@@ -277,9 +278,12 @@ object scip {
   }
 
   extension (s: String) {
-    inline def all: Scip[Boolean] = ${ MacroImpls.stringMatchImpl('s) }
-    inline def any: Scip[Boolean] = ${ MacroImpls.stringAltImpl('s) }
+    inline def all: Scip[Boolean] = ${ MacroImpls.stringMatchImpl('{ s }) }
+    inline def any: Scip[Boolean] = ${ MacroImpls.stringAltImpl('{ s }) }
   }
+
+  inline def choice(inline ss: String*): Scip[Boolean] =
+    ${ MacroImpls.stringChoice('{ ss }) }
 
   inline def seq(inline b: String): Scip[Boolean] =
     val bytes = b.getU8Bytes
@@ -321,6 +325,16 @@ object scip {
       }
     }
 
+    def stringChoice(s: Expr[Seq[String]])(using quotes: Quotes): Expr[Scip[Boolean]] =
+      import quotes.reflect.*
+      s.value match
+        case None =>
+          report.errorAndAbort(s"parameters are not constant", s)
+        case Some(v) =>
+          val bytes = v.map(_.getU8Bytes.toSeq)
+          val trie  = trieFromBytes(bytes)
+          bytesAltImpl(trie)
+
     def stringAltImpl(s: Expr[String])(using quotes: Quotes): Expr[Scip[Boolean]] =
       import quotes.reflect.*
       s.value match
@@ -330,12 +344,19 @@ object scip {
           val bytes = v.map(_.toString.getU8Bytes.toSeq)
           bytesAltImpl(trieFromBytes(bytes))
 
-    case class MiniTrie(elems: Seq[Byte], children: Map[Byte, MiniTrie])
+    /** [[terminals]] are terminal bytes where the match ends */
+    case class MiniTrie(terminals: Set[Byte], children: Map[Set[Byte], MiniTrie]) {
+      def isEmpty = terminals.isEmpty && children.isEmpty
+    }
 
     def trieFromBytes(bytes: Seq[Seq[Byte]]): MiniTrie = {
-      val elems    = bytes.filter(_.length == 1).map(_.head)
-      val other    = bytes.filter(_.length > 1)
-      val children = other.groupBy(_.head).view.mapValues(ss => trieFromBytes(ss.map(_.drop(1)))).toMap
+      val elems = bytes.filter(_.length == 1).map(_.head).toSet
+      val other = bytes.filter(_.length > 1)
+      val tries = other.groupBy(_.head).view.mapValues(ss => trieFromBytes(ss.map(_.drop(1))))
+      val children = tries.groupBy(_._2).map { (trie, orig) =>
+        val bytes = orig.map(_._1).toSet
+        bytes -> trie
+      }.toMap
       MiniTrie(elems, children)
     }
 
@@ -344,41 +365,82 @@ object scip {
       '{
         Scip { (scx: Scx) ?=>
           ${
-            def terminals(bytes: Seq[Byte], len: Int): Option[CaseDef] =
+
+            def makeCase(bytes: Set[Byte], inner: Term) = CaseDef(
+              Alternatives(bytes.toList.sorted.map { b => Expr(b).asTerm }),
+              None,
+              inner
+            )
+
+            def terminals(bytes: Set[Byte], len: Int): Option[CaseDef] =
               if bytes.isEmpty then None
               else
-                Some(CaseDef(
-                  Alternatives(bytes.sorted.distinct.toList.map { b => Expr(b).asTerm }),
-                  None,
-                  '{
-                    scx.index += ${ Expr(len) }
-                    true
-                  }.asTerm
-                ))
+                Some(
+                  makeCase(
+                    bytes,
+                    '{
+                      // only the terminal case increases the index, so we increase by the full length of the matched sequence
+                      scx.index += ${ Expr(len) }
+                      true
+                    }.asTerm
+                  )
+                )
 
             val wildcardCase = CaseDef(Wildcard(), None, '{ false }.asTerm)
 
             def recurse(bytes: MiniTrie, level: Int): Expr[Boolean] = {
-              val termCases = terminals(bytes.elems, level)
 
-              val childCases = bytes.children.map { (b, trie) =>
-                val inner = recurse(trie, level + 1)
-                CaseDef(Expr(b).asTerm, None, inner.asTerm)
-              }
+              def advance = if level > 1 then '{ scx.index += ${ Expr(level - 1) } }
+              else '{}
 
-              val res = '{
-                scx.available(${ Expr(level) }) && ${
-                  Match(
-                    '{ scx.input(scx.index + ${ Expr(level - 1) }) }.asTerm,
-                    List[IterableOnce[CaseDef]](
-                      termCases,
-                      childCases,
-                      Some(wildcardCase),
-                    ).flatten
-                  ).asExprOf[Boolean]
+              def grabPrefix(bytes: MiniTrie, acc: Seq[Byte]): (Seq[Byte], MiniTrie) =
+                if bytes.children.isEmpty && bytes.terminals.sizeIs == 1
+                then (acc :+ bytes.terminals.head, MiniTrie.apply(Set.empty, Map.empty))
+                else if bytes.terminals.isEmpty && bytes.children.sizeIs == 1 && bytes.children.head._1.sizeIs == 1
+                then
+                  val (byteSet, trie) = bytes.children.head
+                  grabPrefix(trie, acc :+ byteSet.head)
+                else
+                  (acc, bytes)
+
+              val (prefix, rest) = grabPrefix(bytes, Seq.empty)
+              if prefix.nonEmpty
+              then
+                val array = prefix.toArray
+                if rest.isEmpty
+                then
+                  '{
+                    ${ advance }
+                    ${ bytesMatchImpl(array) }.run
+                  }
+                else
+                  val inner = recurse(rest, 1)
+                  '{
+                    ${ advance }
+                    ${ bytesMatchImpl(array) }.run && $inner
+                  }
+              else
+                val bytes = rest
+
+                val termCases = terminals(bytes.terminals, level)
+
+                val childCases = bytes.children.map { (bytes, trie) =>
+                  val inner = recurse(trie, level + 1)
+                  makeCase(bytes, inner.asTerm)
                 }
-              }
-              res
+
+                '{
+                  scx.available(${ Expr(level) }) && ${
+                    Match(
+                      '{ scx.input(scx.index + ${ Expr(level - 1) }) }.asTerm,
+                      List[IterableOnce[CaseDef]](
+                        termCases,
+                        childCases,
+                        Some(wildcardCase),
+                      ).flatten
+                    ).asExprOf[Boolean]
+                  }
+                }
             }
             recurse(outerBytes, 1)
           }
@@ -386,5 +448,4 @@ object scip {
       }
     }
   }
-
 }

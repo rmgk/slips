@@ -127,6 +127,21 @@ class SimpleTest extends munit.FunSuite {
     catch case e: ScipEx => throw IllegalStateException(e.getMessage)
   }
 
+  test("more than one byte alternatives") {
+    val p = "äöü".any.rep.min(0).str
+
+    val s = "öööäääüüüüä"
+    val res = p.runInContext(Scx(s))
+    assertEquals(res, s)
+  }
+
+  test("multi string choice") {
+    val p = choice("abc def 1", "abc hef 2", "abc kef 1").str
+    val s = "abc kef 1"
+    val res = p.runInContext(Scx(s))
+    assertEquals(res, s)
+  }
+
 }
 
 case class ScitzenDate(year: String, month: String, day: String) {
