@@ -25,7 +25,7 @@ def transferTo(in: InputStream, out: OutputStream): Unit = {
 def deleteRecursive(path: Path): Unit = {
   if Files.isDirectory(path, LinkOption.NOFOLLOW_LINKS)
   then Files.list(path).nn.iterator().nn.asScala.toSeq.foreach(deleteRecursive)
-  else Files.delete(path)
+  Files.delete(path)
 }
 
 def streamToString(in: InputStream): String = {
