@@ -1,6 +1,6 @@
 = Changelog
 
-== v.next
+== v.0.4.8
 
 • Delay
 	• make Async combinators more systematic (add transform & recover)
