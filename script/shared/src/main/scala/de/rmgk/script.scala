@@ -34,35 +34,47 @@ def streamToString(in: InputStream): String = {
   bo.toString(StandardCharsets.UTF_8)
 }
 
-type CommandPart = String | Path | Long | Int | Char
+class ProcessResultException(code: Int) extends Exception
 
-given extensions: Object with
+implicit object extensions:
   extension (path: Path)
     def readToString: String =
+      // read string not present on native :(
       new String(Files.readAllBytes(path), StandardCharsets.UTF_8)
 
-  extension (pb: ProcessBuilder)
-    def runResult(): Either[Int, String] = {
-      import scala.language.unsafeNulls
-      val process = pb
-        .inheritIO().redirectOutput(Redirect.PIPE)
-        .start()
-      val code = process.waitFor()
-
+  extension (p: Process)
+    @throws[ProcessResultException]
+    def resultString(): String =
+      val code = p.exitValue()
       if code != 0
-      then Left(code)
-      else Right(Using(process.getInputStream)(streamToString).get)
-    }
+      then throw ProcessResultException(code)
+      else Using(p.getInputStream.nn)(streamToString).get
+
+  extension (pb: ProcessBuilder)
+    def scriptStart(): Process =
+      import scala.language.unsafeNulls
+      pb.inheritIO().redirectOutput(Redirect.PIPE).start()
+
     def run(): String =
-      pb.runResult().toOption.getOrElse("")
+      val process = pb.scriptStart()
+      process.waitFor()
+      process.resultString()
+
     def runPrint(): Unit = println(run())
 
+    def asyncResult: Async[Any, String] = Async {
+      val process = scriptStart().onExit().nn.toAsync.bind
+      process.resultString()
+    }
+  end extension
+
+  type CommandPart = String | Path | Long | Int | Char
   extension (sc: StringContext)
-    def process(args: (CommandPart | Seq[CommandPart])*): ProcessBuilder = {
+    def process(args: (CommandPart | Iterable[CommandPart])*): ProcessBuilder = {
       val components = sc.parts.iterator.zipAll(args, "", List.empty[String]).flatMap { (part, arg) =>
         import scala.language.unsafeNulls
         val parts = arg match
-          case s: Seq[_]          => s.map(_.toString)
+          case s: Iterable[_]     => s.map(_.toString)
           case other: CommandPart => Seq(other.toString())
         part.split("\\s").iterator.concat(parts)
       }.filter(s => !s.isBlank).toVector

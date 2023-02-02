@@ -1,11 +1,13 @@
 import de.rmgk.delay.*
 
+import scala.util.{Failure, Success}
+
 class DelayTests extends munit.FunSuite {
   test("exception in async") {
     val as = Async { throw new IllegalStateException("test") }
     as.run {
-      case Left(e)  => assert(e.getMessage == "test")
-      case Right(_) => assert(false)
+      case Failure(e) => assert(e.getMessage == "test")
+      case Success(_) => assert(false)
     }
   }
 
@@ -24,8 +26,8 @@ class DelayTests extends munit.FunSuite {
     assert(count == 0)
 
     counting.run {
-      case Left(e)  => assert(e.getMessage == "test")
-      case Right(_) => assert(false)
+      case Failure(e) => assert(e.getMessage == "test")
+      case Success(_) => assert(false)
     }
 
     assert(count == 1)
@@ -52,8 +54,8 @@ class DelayTests extends munit.FunSuite {
     assert(count == 0)
 
     counting.run {
-      case Left(e)  => assert(e.getMessage == "test2")
-      case Right(_) => assert(false)
+      case Failure(e) => assert(e.getMessage == "test2")
+      case Success(_) => assert(false)
     }
 
     assert(count == 2)
@@ -74,12 +76,12 @@ class DelayTests extends munit.FunSuite {
         messages ::= m2
       }.bind
     }
-      .run {
-        case Left(e) =>
+      .run(using ()) {
+        case Failure(e) =>
           assert(e.getMessage == me)
           messages ::= m4
         case _ => assert(false)
-      }(using ())
+      }
 
     assertEquals(messages, List(m4, m3, m1))
   }

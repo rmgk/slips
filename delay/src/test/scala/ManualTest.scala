@@ -21,7 +21,7 @@ def run() =
   }
 
   println("runs first")
-  res2.run(println)(using global)
+  res2.run(using global)(println)
 
   println(printCode {
     Async.resource(1, _ + 1) {

@@ -1,4 +1,4 @@
-import de.rmgk.script.{extensions, jvmExtensions}
+import de.rmgk.script.{extensions, ProcessResultException}
 import de.rmgk.delay.{Async, extensions}
 
 import java.io.IOException
@@ -11,18 +11,17 @@ class AsyncTest extends munit.FunSuite {
     Async {
       val path = Paths.get(".").nn.toAbsolutePath
       val res  = process"ls ${path.toString}".asyncResult.bind
-      assert(res.isRight)
     }.runToFuture
   }
 
   test("no splitting inner strings") {
     Async {
       val res = process"${"ls -al"}".asyncResult.bind
-      assert(res.isLeft, "inner strings are not split")
+      assert(false, "inner strings are not split")
 
     }.runToFuture.recover {
-      case e: IOException =>
-        // jvm throws an exception, that’s fine
+      // jvm and native throw different exceptions, that’s fine
+      case e: (IOException | ProcessResultException) =>
         Future.successful(())
     }
   }
@@ -32,7 +31,6 @@ class AsyncTest extends munit.FunSuite {
       import scala.language.unsafeNulls
       val path = Paths.get(".").toAbsolutePath
       val res  = process"${List("ls", path)}".asyncResult.bind
-      assert(res.isRight)
     }.runToFuture(using ())
   }
 
