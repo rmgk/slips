@@ -1,5 +1,7 @@
 import de.rmgk.delay.*
 
+import scala.concurrent.{Await, Future}
+import scala.concurrent.duration.Duration
 import scala.util.{Failure, Success}
 
 class DelayTests extends munit.FunSuite {
@@ -84,6 +86,44 @@ class DelayTests extends munit.FunSuite {
       }
 
     assertEquals(messages, List(m4, m3, m1))
+  }
+
+  test("retry counter") {
+    def makeFailing =
+      var needed = 3
+      val failsALot = Async[Any] {
+        needed -= 1
+        if needed >= 0
+        then throw new Exception(s"not yet $needed")
+        else "OK"
+      }
+
+      // this is an interesting trick, but will stackoverflow at some point
+      lazy val recovering: Async[Int, String] = failsALot.recover { retries ?=> e =>
+        if retries > 0
+        then recovering.provide(retries - 1)
+        else throw e
+      }
+      recovering
+    end makeFailing
+
+    val res = Await.result(makeFailing.runToFuture(using 4), Duration.Inf)
+    assertEquals(res, "OK")
+
+    val res2: Future[String] = Await.ready(makeFailing.runToFuture(using 2), Duration.Inf)
+
+    assert(res2.value.get.isFailure)
+  }
+
+  test("provide flow") {
+    val res: Async[Any, String] = Async[Any] {
+      Async(4).bind
+      Async.provided("provided") {
+        summon
+      }.bind
+    }
+
+    println(res.runToFuture)
   }
 
 }

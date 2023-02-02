@@ -128,6 +128,9 @@ object delay {
           Sync(res.get)
         }.bind
       }
+
+    inline def provided[Ctx, A](ctx: Ctx)(inline expr: Ctx ?=> A): Async[Any, A] =
+      Async { expr }.provide(ctx)
   end AsyncCompanion
 
   /** Syntactic convenience to enable type inference of `Ctx`. */
@@ -166,13 +169,20 @@ object delay {
       inline def flatMap[B](inline f: A => Sync[Ctx, B]): Sync[Ctx, B] = Sync { f(sync.run).run }
     }
 
-    extension [Ctx, A](inline async: Async[Ctx, A]) {
+    extension [Ctx, A](inline async: Async[Ctx, A])
 
       /** Start the underlying computation and pass the result to `cb`. */
       inline def run(using inline ctx: Ctx)(inline cb: Callback[A]): Unit =
         ${ DelayMacros.handleInBlock[Ctx, A]('{ async }, '{ ctx }, '{ cb }) }
+
+      inline def provide[Outer](inline part: Outer ?=> Ctx): Async[Outer, A] =
+        Async[Outer].fromCallback[A] { (outer: Outer) ?=> (cb: Callback[A]) ?=>
+          async.run(using part(using outer))(cb)
+        }
+
       inline def map[B](inline f: Ctx ?=> A => B): Async[Ctx, B] =
         async.flatMap { a => Sync { f(a) } }
+
       inline def transform[B](inline f: Ctx ?=> Try[A] => Async[Ctx, B]): Async[Ctx, B] = Async.fromCallback {
         async.run { res =>
           try f(res).run(Async.handler)
@@ -182,6 +192,7 @@ object delay {
               Async.handler.fail(e)
         }
       }
+
       inline def flatMap[B](inline f: Ctx ?=> A => Async[Ctx, B]): Async[Ctx, B] =
         transform { a => f(a.get) }
 
@@ -207,8 +218,7 @@ object delay {
         val p = new Promise[A]
         async.run(p)
         p.async
-
-    }
+    end extension
 
     extension [A](inline fut: Future[A])
       inline def toAsync(using inline ec: ExecutionContext): Async[Any, A] =
