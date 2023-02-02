@@ -153,7 +153,7 @@ object delay {
     val async: Async[Any, T] = new Async(handler)
   }
 
-  given extensions: Object with {
+  implicit object extensions {
 
     extension [Ctx, A](inline sync: Sync[Ctx, A]) {
 
