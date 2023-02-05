@@ -52,20 +52,29 @@ object scip {
       val bs = this.peek
       val b  = bs & 0xff
       if (b & Utf8bits.maxBit) == 0 then if p(b) then 1 else 0
-      else
+      else Utf8bits.utf8Pred(p, bs, b)
+    }
+
+    object Utf8bits {
+
+      def utf8Pred(p: Int => Boolean, bs: Byte, b: Int) = {
         val count = Integer.numberOfLeadingZeros(~bs) - 24
         val v = (count: @switch) match
           case 2 => parse2(b)
           case 3 => parse3(b)
           case 4 => parse4(b)
-        if (p(v)) count else 0
-    }
+          case other =>
+            throw IllegalStateException(
+              s"byte ${b.toBinaryString} at ${index} is not a legal utf-8 value.",
+              ScipExInstance
+            )
+        if (p(v)) count
+        else 0
+      }
 
-    private def parse2(b: Int): Int = Utf8bits.grab(Utf8bits.addLowest(b, 0, 5), 1, 2)
-    private def parse3(b: Int): Int = Utf8bits.grab(Utf8bits.addLowest(b, 0, 4), 1, 3)
-    private def parse4(b: Int): Int = Utf8bits.grab(Utf8bits.addLowest(b, 0, 3), 1, 4)
-
-    object Utf8bits {
+      inline def parse2(b: Int): Int = Utf8bits.grab(Utf8bits.addLowest(b, 0, 5), 1, 2)
+      inline def parse3(b: Int): Int = Utf8bits.grab(Utf8bits.addLowest(b, 0, 4), 1, 3)
+      inline def parse4(b: Int): Int = Utf8bits.grab(Utf8bits.addLowest(b, 0, 3), 1, 4)
 
       inline val maxBit: 128                               = 1 << 7
       inline def lowest(inline b: Int, inline n: Int): Int = b & ((1 << n) - 1)
@@ -96,8 +105,7 @@ object scip {
 
   object Scx {
     def apply(s: String): Scx =
-      import scala.language.unsafeNulls
-      val b = s.getBytes(UTF_8)
+      val b = s.getU8Bytes
       Scx(b, index = 0, maxpos = b.length, depth = 0, lastFail = -1, tracing = true)
   }
 
@@ -125,25 +133,25 @@ object scip {
     inline def ~>[B](inline other: Scip[B]): Scip[B]       = Scip { scip.run; other.run }
     inline def <~>[B](inline other: Scip[B]): Scip[(A, B)] = Scip { (scip.run, other.run) }
     inline def |[B >: A](inline other: Scip[B]): Scip[B] = Scip {
-      val start = scx.index
+      val `start|` = scx.index
       try scip.run
       catch
         case e: ScipEx =>
-          scx.index = start
+          scx.index = `start|`
           other.run
     }
     inline def opt: Scip[Option[A]] = scip.map(Some.apply) | Scip { None }
 
     inline def region: Scip[(Int, Int)] = Scip {
-      val start = scx.index
+      val startRegion = scx.index
       scip.run
-      (start, scx.index)
+      (startRegion, scx.index)
     }
 
     inline def byteCount: Scip[Int] = Scip {
-      val start = scx.index
+      val startBytes = scx.index
       scip.run
-      scx.index - start
+      scx.index - startBytes
     }
 
     inline def augment[B](inline f: Scip[A] => Scip[B]): Scip[(A, B)] = Scip {
@@ -157,18 +165,18 @@ object scip {
 
     /** always backtracks independent of result */
     inline def lookahead: Scip[A] = Scip {
-      val start = scx.index
+      val startLookahead = scx.index
       try scip.run
-      finally scx.index = start
+      finally scx.index = startLookahead
     }
 
     /** converts exceptions into false */
     inline def attempt: Scip[Boolean] = Scip {
-      val start = scx.index
+      val startAttempt = scx.index
       try { scip.run; true }
       catch
         case e: ScipEx =>
-          scx.index = start
+          scx.index = startAttempt
           false
     }
     inline def withFilter(inline p: A => Boolean): Scip[A] = scip.require(p)
@@ -182,11 +190,11 @@ object scip {
       var resultIndex = scx.index
       try
         while
-          val start = scx.index
-          val res   = scip.run
+          val startList = scx.index
+          val res       = scip.run
           resultIndex = scx.index
           acc.addOne(res)
-          sep.run && start < scx.index
+          sep.run && startList < scx.index
         do ()
         acc.toList
       catch case e: ScipEx => acc.toList
@@ -194,9 +202,9 @@ object scip {
     }
 
     inline def dropstr: Scip[String] = Scip {
-      val start = scx.index
+      val startStr = scx.index
       scip.run
-      scx.str(start, scx.index)
+      scx.str(startStr, scx.index)
     }
 
     inline def trace(inline name: String): Scip[A] = Scip {
@@ -222,10 +230,10 @@ object scip {
 
   extension (inline scip: Scip[Boolean]) {
     inline def orFail: Scip[Unit] = Scip {
-      val start = scx.index
+      val startOrFail = scx.index
       if scip.run then ()
       else
-        scx.index = start
+        scx.index = startOrFail
         scx.fail
     }
     inline def str: Scip[String] = scip.orFail.dropstr
@@ -237,8 +245,8 @@ object scip {
     inline def opt: Scip[true]                                = Scip { scip.run; true }
     inline def or(inline other: Scip[Boolean]): Scip[Boolean] = Scip { scip.run || other.run }
     inline def and(inline other: Scip[Boolean]): Scip[Boolean] = Scip {
-      val start = scx.index
-      scip.run && { other.run || { scx.index = start; false } }
+      val startAnd = scx.index
+      scip.run && { other.run || { scx.index = startAnd; false } }
     }
 
     inline def ifso[B](inline other: Scip[B]): Scip[B] = Scip {
@@ -255,8 +263,8 @@ object scip {
           scip.run
           true
         case _ =>
-          val start = scx.index
-          scip.run >= i || { scx.index = start; false }
+          val startMin = scx.index
+          scip.run >= i || { scx.index = startMin; false }
     }
   }
 
@@ -272,9 +280,9 @@ object scip {
   }
 
   inline def until(inline end: Scip[Boolean]): Scip[Int] = Scip {
-    val start = scx.index
+    val startUntil = scx.index
     while !end.lookahead.run && scx.next do ()
-    scx.index - start
+    scx.index - startUntil
   }
 
   extension (s: String) {
@@ -306,20 +314,26 @@ object scip {
         case None =>
           report.warning(s"value is not constant", s)
           '{ seq($s.getU8Bytes) }
-        case Some(v) => bytesMatchImpl(v.getU8Bytes)
+        case Some(v) =>
+          val bytes = v.getU8Bytes
+          '{
+            Scip {
+              ${ bytesMatchImpl(bytes, 0) }.run && {
+                scx.index += ${ Expr(bytes.length) }
+                true
+              }
+            }
+          }
 
-    def bytesMatchImpl(bytes: Array[Byte])(using quotes: Quotes): Expr[Scip[Boolean]] = {
+    def bytesMatchImpl(bytes: Array[Byte], offset: Int)(using quotes: Quotes): Expr[Scip[Boolean]] = {
       import quotes.reflect.*
       '{
         Scip { (scx: Scx) ?=>
-          scx.available(${ Expr(bytes.length) }) && ${
+          scx.available(${ Expr(bytes.length + offset) }) && ${
             val stmts = bytes.iterator.zipWithIndex.map { (b, i) =>
-              '{ scx.ahead(${ Expr(i) }, ${ Expr(b) }) }
+              '{ scx.ahead(${ Expr(i + offset) }, ${ Expr(b) }) }
             }
             stmts.reduceLeft((l, r) => '{ ${ l } && ${ r } })
-          } && {
-            scx.index += ${ Expr(bytes.length) }
-            true
           }
         }
       }
@@ -372,7 +386,7 @@ object scip {
               inner
             )
 
-            def terminals(bytes: Set[Byte], len: Int): Option[CaseDef] =
+            def terminals(bytes: Set[Byte], offset: Int): Option[CaseDef] =
               if bytes.isEmpty then None
               else
                 Some(
@@ -380,7 +394,7 @@ object scip {
                     bytes,
                     '{
                       // only the terminal case increases the index, so we increase by the full length of the matched sequence
-                      scx.index += ${ Expr(len) }
+                      scx.index += ${ Expr(offset + 1) }
                       true
                     }.asTerm
                   )
@@ -388,10 +402,7 @@ object scip {
 
             val wildcardCase = CaseDef(Wildcard(), None, '{ false }.asTerm)
 
-            def recurse(bytes: MiniTrie, level: Int): Expr[Boolean] = {
-
-              def advance = if level > 1 then '{ scx.index += ${ Expr(level - 1) } }
-              else '{}
+            def recurse(bytes: MiniTrie, offset: Int): Expr[Boolean] = {
 
               def grabPrefix(bytes: MiniTrie, acc: Seq[Byte]): (Seq[Byte], MiniTrie) =
                 if bytes.children.isEmpty && bytes.terminals.sizeIs == 1
@@ -410,29 +421,30 @@ object scip {
                 if rest.isEmpty
                 then
                   '{
-                    ${ advance }
-                    ${ bytesMatchImpl(array) }.run
+                    ${ bytesMatchImpl(array, offset) }.run && {
+                      scx.index += ${ Expr(offset + array.length) }
+                      true
+                    }
                   }
                 else
-                  val inner = recurse(rest, 1)
+                  val inner = recurse(rest, offset + array.size)
                   '{
-                    ${ advance }
-                    ${ bytesMatchImpl(array) }.run && $inner
+                    ${ bytesMatchImpl(array, offset) }.run && $inner
                   }
               else
                 val bytes = rest
 
-                val termCases = terminals(bytes.terminals, level)
+                val termCases = terminals(bytes.terminals, offset)
 
                 val childCases = bytes.children.map { (bytes, trie) =>
-                  val inner = recurse(trie, level + 1)
+                  val inner = recurse(trie, offset + 1)
                   makeCase(bytes, inner.asTerm)
                 }
 
                 '{
-                  scx.available(${ Expr(level) }) && ${
+                  scx.available(${ Expr(offset + 1) }) && ${
                     Match(
-                      '{ scx.input(scx.index + ${ Expr(level - 1) }) }.asTerm,
+                      '{ scx.input(scx.index + ${ Expr(offset) }) }.asTerm,
                       List[IterableOnce[CaseDef]](
                         termCases,
                         childCases,
@@ -442,7 +454,7 @@ object scip {
                   }
                 }
             }
-            recurse(outerBytes, 1)
+            recurse(outerBytes, 0)
           }
         }
       }

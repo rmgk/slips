@@ -128,18 +128,33 @@ class SimpleTest extends munit.FunSuite {
   }
 
   test("more than one byte alternatives") {
-    val p = "äöü".any.rep.min(0).str
+    inline def p = "äöü".any.rep.min(0).str
 
-    val s = "öööäääüüüüä"
+    val s   = "öööäääüüüüä"
     val res = p.runInContext(Scx(s))
     assertEquals(res, s)
   }
 
   test("multi string choice") {
-    val p = choice("abc def 1", "abc hef 2", "abc kef 1").str
-    val s = "abc kef 1"
-    val res = p.runInContext(Scx(s))
+    inline def p = choice("abc def 1", "abc hef 2", "abc kef 1").str
+    val s        = "abc kef 1"
+
+    val res =
+      try p.runInContext(Scx(s))
+      catch
+        case e: Throwable =>
+          e.printStackTrace()
+          throw e
     assertEquals(res, s)
+  }
+
+  test("unicode + any") {
+    inline def listSybol      = "•*".any
+    val digits: Scip[Boolean] = cpred(Character.isDigit)
+    val p                     = listSybol or digits
+    val s                     = "…"
+    val res                   = p.runInContext(Scx(s))
+    assertEquals(res, false)
   }
 
 }

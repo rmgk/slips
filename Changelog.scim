@@ -1,6 +1,11 @@
 = Changelog
 
-== v.0.4.8
+== v0.4.9
+
+• Scip
+	• fix string alternatives in case of failure
+
+== v0.4.8
 
 • Delay
 	• make Async combinators more systematic (add transform & recover)
