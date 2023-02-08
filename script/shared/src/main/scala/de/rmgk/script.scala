@@ -1,7 +1,5 @@
 package de.rmgk.script
 
-import de.rmgk.delay.*
-
 import java.io.{ByteArrayOutputStream, InputStream, OutputStream}
 import java.lang.ProcessBuilder.Redirect
 import java.nio.charset.StandardCharsets
@@ -61,11 +59,6 @@ implicit object extensions:
       process.resultString()
 
     def runPrint(): Unit = println(run())
-
-    def asyncResult: Async[Any, String] = Async {
-      val process = scriptStart().onExit().nn.toAsync.bind
-      process.resultString()
-    }
   end extension
 
   type CommandPart = String | Path | Long | Int | Char
