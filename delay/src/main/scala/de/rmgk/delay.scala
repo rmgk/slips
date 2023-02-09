@@ -60,16 +60,14 @@ object delay {
     * This could potentially be simplified if we ever get named type parameters.
     */
   class SyncCompanion[Ctx]:
-    /**
-      */
     inline def apply[A](inline run: Ctx ?=> A): Sync[Ctx, A] = new Sync(run(using _))
   inline def Sync[Ctx]: SyncCompanion[Ctx] = new SyncCompanion[Ctx] {}
 
   /** A callback that also handles failure. */
   @FunctionalInterface
   trait Callback[-A] {
-    inline def succeed(value: A): Unit   = complete(Right(value))
-    inline def fail(ex: Throwable): Unit = complete(Left(ex))
+    inline def succeed(value: A): Unit   = complete(Success(value))
+    inline def fail(ex: Throwable): Unit = complete(Failure(ex))
     def complete(tr: Try[A]): Unit
     inline def complete(res: Either[Throwable, A]): Unit = complete(res.toTry)
   }
@@ -159,7 +157,7 @@ object delay {
     val async: Async[Any, T] = new Async(handler)
   end Promise
 
-  implicit object extensions:
+  implicit object syntax:
 
     extension [Ctx, A](inline sync: Sync[Ctx, A]) {
 
@@ -234,7 +232,7 @@ object delay {
           else Async.handler.fail(IllegalStateException("completion stage returned nothing without failure"))
         }
       }
-  end extensions
+  end syntax
 
   object DelayMacros:
     def applyInBlock[Ctx: Type, B: Type](
