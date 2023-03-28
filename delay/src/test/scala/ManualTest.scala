@@ -1,6 +1,6 @@
 package de.rmgk
 
-import de.rmgk.delay.{Async, Sync, extensions}
+import de.rmgk.delay.{Async, Sync, syntax}
 
 import scala.concurrent.ExecutionContext.global
 import scala.concurrent.Future

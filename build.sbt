@@ -8,7 +8,7 @@ publish / skip := true
 val commonSettings = Def.settings(
   organization := "de.rmgk.slips",
   scalaVersion_3,
-  libraryDependencies ++= List(munit.value, munitScalacheck.value),
+  libraryDependencies ++= List(munit.value, munitCheck.value),
   explicitNulls(Compile),
   publishSonatype
 )

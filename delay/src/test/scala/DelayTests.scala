@@ -88,31 +88,34 @@ class DelayTests extends munit.FunSuite {
     assertEquals(messages, List(m4, m3, m1))
   }
 
-  test("retry counter") {
-    def makeFailing =
-      var needed = 3
-      val failsALot = Async[Any] {
-        needed -= 1
-        if needed >= 0
-        then throw new Exception(s"not yet $needed")
-        else "OK"
-      }
+  def makeFailing =
+    var needed = 3
+    val failsALot = Async[Any] {
+      needed -= 1
+      if needed >= 0
+      then throw new Exception(s"not yet $needed")
+      else "OK"
+    }
 
-      // this is an interesting trick, but will stackoverflow at some point
-      lazy val recovering: Async[Int, String] = failsALot.recover { retries ?=> e =>
-        if retries > 0
-        then recovering.provide(retries - 1)
-        else throw e
-      }
-      recovering
-    end makeFailing
+    // this is an interesting trick, but will stackoverflow at some point
+    lazy val recovering: Async[Int, String] = failsALot.recover { retries ?=> e =>
+      if retries > 0
+      then recovering.provide(retries - 1)
+      else throw e
+    }
+    recovering
+  end makeFailing
 
-    val res = Await.result(makeFailing.runToFuture(using 4), Duration.Inf)
-    assertEquals(res, "OK")
+  test("retry counter success") {
+    import concurrent.ExecutionContext.Implicits.global
+    makeFailing.runToFuture(using 4).map { res =>
+      assertEquals(res, "OK")
+    }
+  }
 
-    val res2: Future[String] = Await.ready(makeFailing.runToFuture(using 2), Duration.Inf)
-
-    assert(res2.value.get.isFailure)
+  test("retry counter failure") {
+    import concurrent.ExecutionContext.Implicits.global
+    makeFailing.runToFuture(using 2).failed
   }
 
   test("provide flow") {
