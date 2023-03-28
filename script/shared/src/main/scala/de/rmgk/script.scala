@@ -9,32 +9,38 @@ import scala.jdk.CollectionConverters.*
 import scala.language.implicitConversions
 import scala.util.Using
 
-def transferTo(in: InputStream, out: OutputStream): Unit = {
-  val bufferSize = 1024
-  val buffer     = new Array[Byte](bufferSize)
-  @tailrec def rec(): Unit =
-    val read = in.read(buffer, 0, bufferSize)
-    if (read >= 0)
-      out.write(buffer, 0, read)
-      rec()
-  rec()
-}
-
 def deleteRecursive(path: Path): Unit = {
   if Files.isDirectory(path, LinkOption.NOFOLLOW_LINKS)
   then Files.list(path).nn.iterator().nn.asScala.toSeq.foreach(deleteRecursive)
   Files.delete(path)
 }
 
-def streamToString(in: InputStream): String = {
-  val bo = new ByteArrayOutputStream()
-  transferTo(in, bo)
-  bo.toString(StandardCharsets.UTF_8)
-}
-
 class ProcessResultException(code: Int) extends Exception
 
 implicit object extensions:
+
+  extension (in: InputStream)
+    def readToBAOS: ByteArrayOutputStream = {
+      val bo = new ByteArrayOutputStream()
+      pipeTo(in, bo)
+      bo
+    }
+    def readToByteArray: Array[Byte] = readToBAOS(in).toByteArray
+    def readToString: String         = readToBAOS(in).toString(StandardCharsets.UTF_8)
+    /* this is essentially in.transferTo, but also works on scala native */
+    def pipeTo(out: OutputStream): Unit = {
+      inline val bufferSize = 1<<13 // 8k similar to JDK buffer size constant
+      in.transferTo()
+      val buffer = new Array[Byte](bufferSize)
+
+      @tailrec def rec(): Unit =
+        val read = in.read(buffer, 0, bufferSize)
+        if (read >= 0)
+          out.write(buffer, 0, read)
+          rec()
+      rec()
+    }
+
   extension (path: Path)
     def readToString: String =
       // read string not present on native :(
