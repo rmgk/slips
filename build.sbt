@@ -75,3 +75,8 @@ def fromCommand(args: String*): List[String] = {
   val res = new String(process.getInputStream.readAllBytes(), java.nio.charset.StandardCharsets.UTF_8)
   res.split(raw"\s+").toList
 }
+
+val benchmark = project
+  .enablePlugins(JmhPlugin)
+  .settings(commonSettings, noPublish)
+  .dependsOn(scip.jvm)
