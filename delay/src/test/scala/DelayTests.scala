@@ -122,7 +122,7 @@ class DelayTests extends munit.FunSuite {
     val res: Async[Any, String] = Async[Any] {
       Async(4).bind
       Async.provided("provided") {
-        summon
+        summon[String]
       }.bind
     }
 
