@@ -122,7 +122,7 @@ object scip {
     inline def apply[A](inline run: Scx ?=> A): Scip[A] = new de.rmgk.delay.Sync(run(using _))
   }
 
-  inline def scx(using scx0: Scx): scx0.type = scx0
+  transparent inline def scx(using inline scx0: Scx): Scx = scx0
 
   extension [A](inline scip: Scip[A]) {
     inline def <~[B](inline other: Scip[B]): Scip[A]       = Scip { val a = scip.run; other.run; a }
