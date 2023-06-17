@@ -3,13 +3,9 @@ package de.rmgk
 import java.nio.charset.StandardCharsets
 import java.nio.charset.StandardCharsets.UTF_8
 import scala.annotation.{switch, tailrec}
-import scala.collection.IndexedSeqView
 import scala.collection.mutable.ListBuffer
-import scala.compiletime.erasedValue
 import scala.quoted.*
-import scala.util.NotGiven
 import scala.util.control.ControlThrowable
-import scala.deriving.Mirror
 import scala.compiletime.summonFrom
 import scala.compiletime.constValueOpt
 
@@ -126,7 +122,7 @@ object scip {
     inline def apply[A](inline run: Scx ?=> A): Scip[A] = new de.rmgk.delay.Sync(run(using _))
   }
 
-  inline def scx(using inline scx0: Scx): scx0.type = scx0
+  inline def scx(using scx0: Scx): scx0.type = scx0
 
   extension [A](inline scip: Scip[A]) {
     inline def <~[B](inline other: Scip[B]): Scip[A]       = Scip { val a = scip.run; other.run; a }
@@ -326,7 +322,6 @@ object scip {
           }
 
     def bytesMatchImpl(bytes: Array[Byte], offset: Int)(using quotes: Quotes): Expr[Scip[Boolean]] = {
-      import quotes.reflect.*
       '{
         Scip { (scx: Scx) ?=>
           scx.available(${ Expr(bytes.length + offset) }) && ${

@@ -50,19 +50,19 @@ object CApi {
 
   /** Width and height are default size */
   @name("scalanative_WEBVIEW_HINT_NONE")
-  val WEBVIEW_HINT_NONE: CInt = extern
+  def WEBVIEW_HINT_NONE: CInt = extern
 
   /** Width and height are minimum bounds */
   @name("scalanative_WEBVIEW_HINT_MIN")
-  val WEBVIEW_HINT_MIN: CInt = extern
+  def WEBVIEW_HINT_MIN: CInt = extern
 
   /** Width and height are maximum bounds */
   @name("scalanative_WEBVIEW_HINT_MAX")
-  val WEBVIEW_HINT_MAX: CInt = extern
+  def WEBVIEW_HINT_MAX: CInt = extern
 
   /** Window size can not be changed by a user */
   @name("scalanative_WEBVIEW_HINT_FIXED")
-  val WEBVIEW_HINT_FIXED: CInt = extern
+  def WEBVIEW_HINT_FIXED: CInt = extern
 
   /** Updates native window size. See WEBVIEW_HINT constants. */
   def webview_set_size(

@@ -2,7 +2,6 @@ package de.rmgk
 
 import scopt.*
 
-import scala.annotation.targetName
 import scala.collection.mutable.ListBuffer
 import scala.compiletime.{constValue, erasedValue, summonAll, summonInline}
 import scala.deriving.Mirror

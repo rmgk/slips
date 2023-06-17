@@ -5,7 +5,7 @@ import CApi.*
 import webview.WebView.{CBDesc, callbacks}
 
 import scala.collection.mutable
-import scala.scalanative.runtime.{Intrinsics, fromRawPtr, throwNullPointer, toRawPtr}
+import scala.scalanative.runtime.{Intrinsics, fromRawPtr, toRawPtr}
 
 class WebView private (val w: webview_t) {
   def setTitle(title: String): Unit = Zone { implicit z =>

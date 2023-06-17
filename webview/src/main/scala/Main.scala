@@ -1,9 +1,8 @@
-import webview.{CApi, WebView}
+import webview.WebView
 
 // based on
 // https://github.com/lolgab/webview-scala
 
-import scala.scalanative.unsafe.*
 
 object Main {
   def main(args: Array[String]): Unit = {

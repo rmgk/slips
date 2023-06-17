@@ -1,8 +1,6 @@
 package de.rmgk
 
 import scala.quoted.*
-import scala.Tuple
-import scala.Function.chain
 
 object resources {
 
@@ -59,7 +57,6 @@ object resources {
         else
           tree.asExpr match
             case '{ (${ x }: Resource).value } =>
-              val before = acc._1
               val res    = foldTree((Nil, true), x.asTerm)(owner)
               // we do not find things with nested things inside
               if (res._1.nonEmpty) then (acc._1, false)
@@ -93,7 +90,7 @@ object resources {
     def getResources[Res: Type](expr: Expr[Res]): Expr[Any] = {
       val fi                = FindResource().foldTree((Nil, true), expr.asTerm)(Symbol.spliceOwner)
       val foundAbstractions = fi._1
-      val foundStatic       = fi._2
+      //val foundStatic       = fi._2
       val definitions       = FindDefs().foldTree(Nil, expr.asTerm)(Symbol.spliceOwner)
 
       val found = foundAbstractions.filterNot { fa =>

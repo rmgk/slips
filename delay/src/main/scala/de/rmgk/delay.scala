@@ -1,12 +1,11 @@
 package de.rmgk
 
-import java.util.Objects.isNull
 import java.util.concurrent.CompletionStage
-import scala.annotation.compileTimeOnly
+import scala.annotation.{compileTimeOnly, unused}
 import scala.concurrent.{ExecutionContext, Future}
 import scala.quoted.{Expr, Quotes, Type}
 import scala.util.control.NonFatal
-import scala.util.{Failure, Random, Success, Try}
+import scala.util.{Failure, Success, Try}
 
 /** Work with descriptions of computations that you want to execute later.
   * Delay offers two abstractions [[Sync]] and [[Async]].
@@ -148,7 +147,7 @@ object delay {
       }.foreach(_.complete(res))
     }
 
-    private def handler(a: Any)(cb: Callback[T]): Unit = synchronized {
+    private def handler(@unused a: Any)(cb: Callback[T]): Unit = synchronized {
       value match
         case None    => callbacks ::= cb
         case Some(v) => cb.complete(v)
@@ -231,6 +230,7 @@ object delay {
           else if null != res then Async.handler.succeed(res)
           else Async.handler.fail(IllegalStateException("completion stage returned nothing without failure"))
         }
+        ()
       }
   end syntax
 
