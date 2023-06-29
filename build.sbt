@@ -18,7 +18,7 @@ val logging = crossProject(JSPlatform, JVMPlatform, NativePlatform)
   .settings(
     commonSettings,
     libraryDependencies += sourcecode.value,
-    version := "0.5.0"
+    version := "0.5.1-SNAPSHOT"
   )
 
 val chain = crossProject(JSPlatform, JVMPlatform, NativePlatform)
