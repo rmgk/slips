@@ -4,6 +4,10 @@
 
 • use individual version numbers
 
+• Logging
+	• Scala 3 only
+	• Rework to focus more on CLI output
+
 == v0.4.9
 
 • Scip
