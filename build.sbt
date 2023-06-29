@@ -10,28 +10,28 @@ val commonSettings = Def.settings(
   scalaVersion_3,
   libraryDependencies ++= List(munit.value, munitCheck.value),
   explicitNulls(Compile),
-  publishSonatype
+  publishSonatype,
 )
 
 val logging = crossProject(JSPlatform, JVMPlatform, NativePlatform)
   .crossType(CrossType.Pure)
   .settings(
     commonSettings,
-    commonCrossBuildVersions,
     libraryDependencies += sourcecode.value,
+    version := "0.5.0"
   )
 
 val chain = crossProject(JSPlatform, JVMPlatform, NativePlatform)
   .crossType(CrossType.Pure)
-  .settings(commonSettings)
+  .settings(commonSettings, version := "0.5.0")
 
 val category = crossProject(JSPlatform, JVMPlatform, NativePlatform)
   .crossType(CrossType.Pure)
-  .settings(commonSettings)
+  .settings(commonSettings, version := "0.5.0")
 
 val options = crossProject(JSPlatform, JVMPlatform, NativePlatform)
   .crossType(CrossType.Pure)
-  .settings(commonSettings, libraryDependencies += scopt.value)
+  .settings(commonSettings, libraryDependencies += scopt.value, version := "0.5.0")
   .jsSettings(
     // seems to be required to run JS tests on node
     Test / scalaJSLinkerConfig ~= { _.withModuleKind(ModuleKind.CommonJSModule) }
@@ -39,24 +39,24 @@ val options = crossProject(JSPlatform, JVMPlatform, NativePlatform)
 
 val datalog = crossProject(JSPlatform, JVMPlatform, NativePlatform)
   .crossType(CrossType.Pure)
-  .settings(commonSettings, noPublish)
+  .settings(commonSettings, noPublish, version := "0.5.0")
 
 val resource = crossProject(JSPlatform, JVMPlatform, NativePlatform)
   .crossType(CrossType.Pure)
-  .settings(commonSettings)
+  .settings(commonSettings, version := "0.5.0")
 
 val delay = crossProject(JSPlatform, JVMPlatform, NativePlatform)
   .crossType(CrossType.Pure)
-  .settings(commonSettings)
+  .settings(commonSettings, version := "0.5.0")
 
 val scip = crossProject(JSPlatform, JVMPlatform, NativePlatform)
   .crossType(CrossType.Pure)
-  .settings(commonSettings)
+  .settings(commonSettings, version := "0.5.0")
   .dependsOn(delay)
 
 val script = crossProject(JVMPlatform, NativePlatform)
   .crossType(CrossType.Pure)
-  .settings(commonSettings)
+  .settings(commonSettings, version := "0.5.0")
 
 val webview =
   project.settings(
