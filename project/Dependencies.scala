@@ -10,7 +10,7 @@ object Dependencies {
   object Versions {
     val directories   = "26"
     val jol           = "0.17"
-    val jsoniterScala = "2.23.1"
+    val jsoniterScala = "2.23.2"
     val jsoup         = "1.16.1"
     val munit         = "1.0.0-M8"
     val okHttp        = "4.10.0"
@@ -57,9 +57,9 @@ object Dependencies {
 
   object slips {
     val category = Def.setting("de.rmgk.slips" %%% "category" % "0.4.7")
-    val chain    = Def.setting("de.rmgk.slips" %%% "chain" % "0.4.7")
+    val chain    = Def.setting("de.rmgk.slips" %%% "chain" % "0.4.9")
     val delay    = Def.setting("de.rmgk.slips" %%% "delay" % "0.4.9")
-    val logging  = Def.setting("de.rmgk.slips" %%% "logging" % "0.4.7")
+    val logging  = Def.setting("de.rmgk.slips" %%% "logging" % "0.5.0")
     val options  = Def.setting("de.rmgk.slips" %%% "options" % "0.4.9")
     val scip     = Def.setting("de.rmgk.slips" %%% "scip" % "0.4.9")
     val script   = Def.setting("de.rmgk.slips" %%% "script" % "0.4.9")

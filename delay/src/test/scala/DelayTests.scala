@@ -126,7 +126,43 @@ class DelayTests extends munit.FunSuite {
       }.bind
     }
 
-    println(res.runToFuture)
+    assertEquals(res.runToFuture.value, Some(Success("provided")))
   }
+
+  test("not cached"):
+    var counter = 0
+    val counting = Async {
+      counter = counter + 1
+      counter
+    }
+
+    val indirect = Async:
+      val c = counting.bind
+      c * 2
+
+
+    assertEquals(counter, 0, "should not execute")
+
+    assertEquals(indirect.runToFuture.value, Some(Success(2)))
+    assertEquals(indirect.runToFuture.value, Some(Success(4)))
+    assertNotEquals(indirect.runToFuture.value, Some(Success(4)))
+
+  test("cached"):
+    var counter = 0
+    val counting = Async {
+      counter = counter + 1
+      counter
+    }.runToAsync
+
+    // did immediately execute
+    assertEquals(counter, 1, "should immediately execute")
+
+    val indirect = Async:
+      val c = counting.bind
+      c * 2
+
+    assertEquals(indirect.runToFuture.value, Some(Success(2)))
+    assertEquals(indirect.runToFuture.value, Some(Success(2)))
+    assertNotEquals(indirect.runToFuture.value, Some(Success(4)))
 
 }
