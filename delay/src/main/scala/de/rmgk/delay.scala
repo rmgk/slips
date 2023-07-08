@@ -34,11 +34,12 @@ import scala.util.{Failure, Success, Try}
   *   y <- {
   *     println("output")
   *     async3
+  *   }
   * } yield { x + y }
   * ```
   * Thus just a bit more regular than for expressions. Note that you may not use bind in any nested expressions, only as the outer method in a single statement, or as the right hand side of a val binding.
   *
-  * Note that [[Sync]] and in particular [[Async]] are just abstractions, there is no additional runtime or internal state beyond composition of functions. In particular, [[Async]] has no concept of parallel execution or threads or anything like that. Using [[delay.extensions.run]] (and thus at some point [[Async.bind]]) simply executes whatever the code you have written in the async handlers and likely the initial [[AsyncCompanion.fromCallback]].
+  * Note that [[Sync]] and in particular [[Async]] are just abstractions, there is no additional runtime or internal state beyond composition of functions. In particular, [[Async]] has no concept of parallel execution or threads or anything like that. Using [[delay.extensions.run]] (and thus at some point [[Async.bind]]) simply executes whatever  code you have written in the async handlers and likely the initial [[AsyncCompanion.fromCallback]].
   *
   * If you need to execute anything on a different thread you can easily do so by using whatever library for threading you fancy. We provide convenience functions to convert to and from [[scala.concurrent.Future]]:
   *
@@ -59,7 +60,7 @@ object delay {
     * This could potentially be simplified if we ever get named type parameters.
     */
   class SyncCompanion[Ctx]:
-    inline def apply[A](inline run: Ctx ?=> A): Sync[Ctx, A] = new Sync(run(using _))
+    inline def apply[A](inline run: Ctx ?=> A): Sync[Ctx, A] = new Sync(x => run(using x))
   inline def Sync[Ctx]: SyncCompanion[Ctx] = new SyncCompanion[Ctx] {}
 
   /** A callback that also handles failure. */
@@ -104,10 +105,9 @@ object delay {
     /** Main async syntax. The body `expr` is not executed until the returned [[Async]] is started with [[delay.extensions.run]] or one of the variants. Any exceptions raised in `expr` are forwarded to the handler of the async run. */
     inline def apply[A](inline expr: Ctx ?=> A): Async[Ctx, A] =
       new Async[Ctx, A](ctx =>
-        cb => {
+        cb =>
           try syntax(expr(using ctx)).run(using ctx)(cb)
           catch case e if NonFatal(e) => cb.fail(e)
-        }
       )
 
     /** Enables the use of [[Async.bind]] inside a sequential looking block. */
@@ -118,16 +118,30 @@ object delay {
       * Makes the resource available inside the async `body` and ensures it is closed as soon as `body` is done (exceptionally or normally).
       */
     inline def resource[R, A](inline open: R, inline close: R => Unit)(inline body: Ctx ?=> R => A): Async[Ctx, A] =
-      Async[Ctx] {
+      Async[Ctx]:
         val r = open
-        Async[Ctx] { body(r) }.transform { res =>
+        Async[Ctx]:
+          body(r)
+        .transform: res =>
           close(r)
           Sync(res.get)
-        }.bind
-      }
+        .bind
 
+    /** `.provide`, but you can put the context first. */
     inline def provided[Ctx, A](ctx: Ctx)(inline expr: Ctx ?=> A): Async[Any, A] =
       Async { expr }.provide(ctx)
+
+    /** While we don’t do bind inside of nested expressions, if the expression returns an async we can bind it.
+      * Sometimes, having this as a block is syntactically more convenient, i.e:
+      * ```
+      * Async:
+      *   bind:
+      *     if random > 4
+      *     then Async(...)
+      *     else Async(...)
+      * ```
+      */
+    inline def bind[Ctx, A](inline a: Async[Ctx, A]): A = a.bind
   end AsyncCompanion
 
   /** Syntactic convenience to enable type inference of `Ctx`. */
@@ -138,20 +152,18 @@ object delay {
     @volatile private var value: Option[Try[T]]        = None
     @volatile private var callbacks: List[Callback[T]] = Nil
 
-    override def complete(res: Try[T]): Unit = {
-      synchronized {
+    override def complete(res: Try[T]): Unit =
+      synchronized:
         value = Some(res)
         val cbs = callbacks
         callbacks = Nil
         cbs
-      }.foreach(_.complete(res))
-    }
+      .foreach(_.complete(res))
 
-    private def handler(@unused a: Any)(cb: Callback[T]): Unit = synchronized {
+    private def handler(@unused a: Any)(cb: Callback[T]): Unit = synchronized:
       value match
         case None    => callbacks ::= cb
         case Some(v) => cb.complete(v)
-    }
 
     val async: Async[Any, T] = new Async(handler)
   end Promise
@@ -161,7 +173,7 @@ object delay {
     extension [Ctx, A](inline sync: Sync[Ctx, A]) {
 
       /** Executes the [[Sync]] given a `Ctx`. */
-      inline def run(using inline ctx: Ctx): A          = ${ DelayMacros.applyInBlock[Ctx, A]('sync, 'ctx) }
+      inline def run(using inline ctx: Ctx): A          = ${ DelayMacros.applyInBlock[Ctx, A]('{ sync }, '{ ctx }) }
       inline def map[B](inline f: A => B): Sync[Ctx, B] = Sync { f(sync.run) }
       inline def flatMap[B](inline f: A => Sync[Ctx, B]): Sync[Ctx, B] = Sync { f(sync.run).run }
     }
@@ -172,33 +184,36 @@ object delay {
       inline def run(using inline ctx: Ctx)(inline cb: Callback[A]): Unit =
         ${ DelayMacros.handleInBlock[Ctx, A]('{ async }, '{ ctx }, '{ cb }) }
 
+      /** Provides a new context to the async. */
       inline def provide[Outer](inline part: Outer ?=> Ctx): Async[Outer, A] =
         Async[Outer].fromCallback[A] { (outer: Outer) ?=> (cb: Callback[A]) ?=>
           async.run(using part(using outer))(cb)
         }
 
+      /** Transform successes. Propagate failures. */
       inline def map[B](inline f: Ctx ?=> A => B): Async[Ctx, B] =
         async.flatMap { a => Sync { f(a) } }
 
-      inline def transform[B](inline f: Ctx ?=> Try[A] => Async[Ctx, B]): Async[Ctx, B] = Async.fromCallback {
-        async.run { res =>
-          try f(res).run(Async.handler)
-          catch
-            case e if NonFatal(e) =>
-              res.recover(e.addSuppressed(_))
-              Async.handler.fail(e)
-        }
-      }
-
+      /** Transform successes. Propagate failures. */
       inline def flatMap[B](inline f: Ctx ?=> A => Async[Ctx, B]): Async[Ctx, B] =
         transform { a => f(a.get) }
 
       /** replaces the async execution with some other async execution in case fo an exception */
       inline def recover(inline f: Ctx ?=> Throwable => Async[Ctx, A]): Async[Ctx, A] =
-        transform {
+        transform:
           case Success(a)   => Sync(a)
           case Failure(err) => f(err)
-        }
+
+      /** Allows to handle both success and failure cases.
+        * More or less a generalized version of `flatMap`
+        */
+      inline def transform[B](inline f: Ctx ?=> Try[A] => Async[Ctx, B]): Async[Ctx, B] = Async.fromCallback:
+        async.run: res =>
+          try f(res).run(Async.handler)
+          catch
+            case e if NonFatal(e) =>
+              res.recover(e.addSuppressed(_))
+              Async.handler.fail(e)
 
       /** Start the underlying computation immediately.
         * Return a Future of the result.
@@ -219,19 +234,16 @@ object delay {
 
     extension [A](inline fut: Future[A])
       inline def toAsync(using inline ec: ExecutionContext): Async[Any, A] =
-        Async.fromCallback {
+        Async.fromCallback:
           fut.onComplete(Async.handler.complete)
-        }
 
     extension [T](inline cs: CompletionStage[T])
-      inline def toAsync: Async[Any, T] = Async.fromCallback {
-        cs.handle { (res, ex) =>
+      inline def toAsync: Async[Any, T] = Async.fromCallback:
+        cs.whenComplete: (res, ex) =>
           if null != ex then Async.handler.fail(ex)
           else if null != res then Async.handler.succeed(res)
           else Async.handler.fail(IllegalStateException("completion stage returned nothing without failure"))
-        }
-        ()
-      }
+        () // cs.whenComplete returns kinda itself … it’s a bit weird, but we just ignore it
   end syntax
 
   object DelayMacros:
