@@ -3,7 +3,6 @@
 
 import org.portablescala.sbtplatformdeps.PlatformDepsPlugin.autoImport.*
 import sbt.*
-import sbt.Keys.*
 
 object Dependencies {
 
