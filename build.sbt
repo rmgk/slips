@@ -18,7 +18,8 @@ val logging = crossProject(JSPlatform, JVMPlatform, NativePlatform)
   .settings(
     commonSettings,
     libraryDependencies += sourcecode.value,
-    version := "0.5.1-SNAPSHOT"
+    version    := "0.5.1-SNAPSHOT",
+    isSnapshot := true
   )
 
 val chain = crossProject(JSPlatform, JVMPlatform, NativePlatform)
@@ -47,7 +48,7 @@ val resource = crossProject(JSPlatform, JVMPlatform, NativePlatform)
 
 val delay = crossProject(JSPlatform, JVMPlatform, NativePlatform)
   .crossType(CrossType.Pure)
-  .settings(commonSettings, version := "0.5.0")
+  .settings(commonSettings, version := "0.5.1-SNAPSHOT", isSnapshot := true)
 
 val scip = crossProject(JSPlatform, JVMPlatform, NativePlatform)
   .crossType(CrossType.Pure)
