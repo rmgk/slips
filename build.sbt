@@ -58,26 +58,3 @@ val scip = crossProject(JSPlatform, JVMPlatform, NativePlatform)
 val script = crossProject(JVMPlatform, NativePlatform)
   .crossType(CrossType.Pure)
   .settings(commonSettings, version := "0.5.0")
-
-val webview =
-  project.settings(
-    commonSettings,
-    noPublish,
-    nativeMode      := "debug", // debug release-fast release-full
-    nativeLTO       := "none",  // none full thin (thin recommended over full)
-    nativeLinkStubs := true,
-    nativeCompileOptions ++= fromCommand("pkg-config", "--cflags", "gtk+-3.0", "webkit2gtk-4.0"),
-    nativeLinkingOptions ++= fromCommand("pkg-config", "--libs", "gtk+-3.0", "webkit2gtk-4.0")
-  ).enablePlugins(ScalaNativePlugin)
-
-def fromCommand(args: String*): List[String] = {
-  val process = new ProcessBuilder(args: _*).start()
-  process.waitFor()
-  val res = new String(process.getInputStream.readAllBytes(), java.nio.charset.StandardCharsets.UTF_8)
-  res.split(raw"\s+").toList
-}
-
-val benchmark = project
-  .enablePlugins(JmhPlugin)
-  .settings(commonSettings, noPublish)
-  .dependsOn(scip.jvm)
