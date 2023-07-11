@@ -196,7 +196,7 @@ class DelayTests extends munit.FunSuite {
     res.runToAsync
     assertEquals(seen, List(7,6,5,4,3,2,1))
 
-  /* I mean, this clearly would not work with async things on other threads, because we cannot abort those with exceptions.  */
+  /* I mean, this clearly would not work with async things on other threads, because we cannot abort those with exceptions. No, wait, actually we can, because the callback runs on that thread. The only thing we then cannot do is actually catch the exception with the boundary. So we would need support from … what? Hmhm. */
   test("generate with better aborts?"):
     val onetwo = Async.fromCallback:
       try
