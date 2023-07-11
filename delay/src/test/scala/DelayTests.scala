@@ -170,13 +170,15 @@ class DelayTests extends munit.FunSuite {
 
   object CancelControl extends ControlThrowable
 
-  /* There is some potential here to expand this into something usable, but it would be good if the CancelControl exception could somehow be handled like boundary/break where the exception has an explicit label. I currently speculate that would require a new subtype of Async, that has this exception label stored somewhere. */
+  /* There is some potential here to expand this into something usable, but it would be good if the CancelControl exception could somehow be handled like boundary/break where the exception has an explicit label. I currently speculate that would require a new subtype of Async, that has this exception label stored somewhere. Actually, we could pass it on evrey invocation of .succeed below. */
   test("generate … ?"):
+
+
     val onetwo = Async.fromCallback:
       try
         Async.handler.succeed(1)
         Async.handler.succeed(2)
-        var x = 3
+        var x = 2
         while
           x += 1
           x < 10
@@ -185,13 +187,42 @@ class DelayTests extends munit.FunSuite {
         Async.handler.succeed(14)
       catch case CancelControl => println("done")
 
+    var seen = List.empty[Int]
+
     val res = Async:
       val x = onetwo.bind
-      println(x)
+      seen ::= x
       if x == 7 then throw CancelControl
     res.runToAsync
+    assertEquals(seen, List(7,6,5,4,3,2,1))
+
+  /* I mean, this clearly would not work with async things on other threads, because we cannot abort those with exceptions.  */
+  test("generate with better aborts?"):
+    val onetwo = Async.fromCallback:
+      try
+        Async.handler.succeed(1)
+        Async.handler.succeed(2)
+        var x = 2
+        while
+          x += 1
+          x < 10
+        do
+          Async.handler.succeed(x)
+        Async.handler.succeed(14)
+      catch case CancelControl => println("done")
 
 
+    var seen = List.empty[Int]
+
+    import scala.util.boundary
+    boundary:
+      val res = Async:
+        val x = onetwo.bind
+        seen ::= x
+        if x == 7 then throw boundary.break(x)
+      res.runToAsync
+
+    assertEquals(seen, List(7,6,5,4,3,2,1))
 
 
 }
