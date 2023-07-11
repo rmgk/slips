@@ -243,7 +243,7 @@ object delay {
           if null != ex then Async.handler.fail(ex)
           else if null != res then Async.handler.succeed(res)
           else Async.handler.fail(IllegalStateException("completion stage returned nothing without failure"))
-        () // cs.whenComplete returns kinda itself … it’s a bit weird, but we just ignore it
+        () // cs.whenComplete returns kinda itself … it’s a bit weird, but I think it is safe to ignore
   end syntax
 
   object DelayMacros:
