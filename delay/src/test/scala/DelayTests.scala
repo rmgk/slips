@@ -3,6 +3,7 @@ import de.rmgk.delay.*
 import scala.concurrent.{Await, Future}
 import scala.concurrent.duration.Duration
 import scala.util.{Failure, Success}
+import scala.util.control.ControlThrowable
 
 class DelayTests extends munit.FunSuite {
   test("exception in async") {
@@ -164,5 +165,33 @@ class DelayTests extends munit.FunSuite {
     assertEquals(indirect.runToFuture.value, Some(Success(2)))
     assertEquals(indirect.runToFuture.value, Some(Success(2)))
     assertNotEquals(indirect.runToFuture.value, Some(Success(4)))
+
+
+
+  object CancelControl extends ControlThrowable
+
+  /* There is some potential here to expand this into something usable, but it would be good if the CancelControl exception could somehow be handled like boundary/break where the exception has an explicit label. I currently speculate that would require a new subtype of Async, that has this exception label stored somewhere. */
+  test("generate … ?"):
+    val onetwo = Async.fromCallback:
+      try
+        Async.handler.succeed(1)
+        Async.handler.succeed(2)
+        var x = 3
+        while
+          x += 1
+          x < 10
+        do
+          Async.handler.succeed(x)
+        Async.handler.succeed(14)
+      catch case CancelControl => println("done")
+
+    val res = Async:
+      val x = onetwo.bind
+      println(x)
+      if x == 7 then throw CancelControl
+    res.runToAsync
+
+
+
 
 }
