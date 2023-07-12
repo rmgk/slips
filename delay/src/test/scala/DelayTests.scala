@@ -141,7 +141,6 @@ class DelayTests extends munit.FunSuite {
       val c = counting.bind
       c * 2
 
-
     assertEquals(counter, 0, "should not execute")
 
     assertEquals(indirect.runToFuture.value, Some(Success(2)))
@@ -166,13 +165,10 @@ class DelayTests extends munit.FunSuite {
     assertEquals(indirect.runToFuture.value, Some(Success(2)))
     assertNotEquals(indirect.runToFuture.value, Some(Success(4)))
 
-
-
   object CancelControl extends ControlThrowable
 
   /* There is some potential here to expand this into something usable, but it would be good if the CancelControl exception could somehow be handled like boundary/break where the exception has an explicit label. I currently speculate that would require a new subtype of Async, that has this exception label stored somewhere. Actually, we could pass it on evrey invocation of .succeed below. */
   test("generate … ?"):
-
 
     val onetwo = Async.fromCallback:
       try
@@ -194,7 +190,7 @@ class DelayTests extends munit.FunSuite {
       seen ::= x
       if x == 7 then throw CancelControl
     res.runToAsync
-    assertEquals(seen, List(7,6,5,4,3,2,1))
+    assertEquals(seen, List(7, 6, 5, 4, 3, 2, 1))
 
   /* I mean, this clearly would not work with async things on other threads, because we cannot abort those with exceptions. No, wait, actually we can, because the callback runs on that thread. The only thing we then cannot do is actually catch the exception with the boundary. So we would need support from … what? Hmhm. */
   test("generate with better aborts?"):
@@ -211,7 +207,6 @@ class DelayTests extends munit.FunSuite {
         Async.handler.succeed(14)
       catch case CancelControl => println("done")
 
-
     var seen = List.empty[Int]
 
     import scala.util.boundary
@@ -222,7 +217,7 @@ class DelayTests extends munit.FunSuite {
         if x == 7 then throw boundary.break(x)
       res.runToAsync
 
-    assertEquals(seen, List(7,6,5,4,3,2,1))
-
+    // this does NOT break, because the break exception is caught and propagated
+    assertEquals(seen, List(14, 9, 8, 7, 6, 5, 4, 3, 2, 1))
 
 }

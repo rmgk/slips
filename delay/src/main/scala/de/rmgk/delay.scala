@@ -7,8 +7,6 @@ import scala.quoted.{Expr, Quotes, Type}
 import scala.util.control.NonFatal
 import scala.util.{Failure, Success, Try}
 
-import scala.util.boundary.Break
-
 /** Work with descriptions of computations that you want to execute later.
   * Delay offers two abstractions [[Sync]] and [[Async]].
   *
@@ -109,9 +107,7 @@ object delay {
       new Async[Ctx, A](ctx =>
         cb =>
           try syntax(expr(using ctx)).run(using ctx)(cb)
-          catch
-            case e: Break[_] => throw e
-            case e if NonFatal(e) => cb.fail(e)
+          catch case e if NonFatal(e) => cb.fail(e)
       )
 
     /** Enables the use of [[Async.bind]] inside a sequential looking block. */
@@ -215,7 +211,6 @@ object delay {
         async.run: res =>
           try f(res).run(Async.handler)
           catch
-            case e: Break[_] => throw e
             case e if NonFatal(e) =>
               res.recover(e.addSuppressed(_))
               Async.handler.fail(e)
