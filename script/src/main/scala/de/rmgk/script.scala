@@ -15,22 +15,22 @@ def deleteRecursive(path: Path): Unit = {
   Files.delete(path)
 }
 
-class ProcessResultException(code: Int) extends Exception
+class ProcessResultException(val code: Int) extends Exception
 
 implicit object extensions:
 
   extension (in: InputStream)
     def readToBAOS: ByteArrayOutputStream = {
       val bo = new ByteArrayOutputStream()
-      pipeTo(in, bo)
+      in.pipeTo(bo)
       bo
     }
-    def readToByteArray: Array[Byte] = readToBAOS(in).toByteArray
-    def readToString: String         = readToBAOS(in).toString(StandardCharsets.UTF_8)
+    def readToByteArray: Array[Byte] = in.readToBAOS.toByteArray.nn
+    def readToString: String         = in.readToBAOS.toString(StandardCharsets.UTF_8)
     /* this is essentially in.transferTo, but also works on scala native */
     def pipeTo(out: OutputStream): Unit = {
       inline val bufferSize = 1<<13 // 8k similar to JDK buffer size constant
-      in.transferTo()
+      in.transferTo(out)
       val buffer = new Array[Byte](bufferSize)
 
       @tailrec def rec(): Unit =
@@ -52,7 +52,7 @@ implicit object extensions:
       val code = p.exitValue()
       if code != 0
       then throw ProcessResultException(code)
-      else Using(p.getInputStream.nn)(streamToString).get
+      else Using(p.getInputStream.nn)(_.readToString).get
 
   extension (pb: ProcessBuilder)
     def scriptStart(): Process =
