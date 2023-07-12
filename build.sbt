@@ -24,7 +24,7 @@ val logging = crossProject(JSPlatform, JVMPlatform, NativePlatform)
 
 val chain = crossProject(JSPlatform, JVMPlatform, NativePlatform)
   .crossType(CrossType.Pure)
-  .settings(commonSettings, version := "0.5.0")
+  .settings(commonSettings, version := "0.5.0", isSnapshot := false)
 
 val category = crossProject(JSPlatform, JVMPlatform, NativePlatform)
   .crossType(CrossType.Pure)
@@ -32,7 +32,7 @@ val category = crossProject(JSPlatform, JVMPlatform, NativePlatform)
 
 val options = crossProject(JSPlatform, JVMPlatform, NativePlatform)
   .crossType(CrossType.Pure)
-  .settings(commonSettings, libraryDependencies += scopt.value, version := "0.5.0")
+  .settings(commonSettings, libraryDependencies += scopt.value, version := "0.5.0", isSnapshot := false)
   .jsSettings(
     // seems to be required to run JS tests on node
     Test / scalaJSLinkerConfig ~= { _.withModuleKind(ModuleKind.CommonJSModule) }
@@ -52,9 +52,9 @@ val delay = crossProject(JSPlatform, JVMPlatform, NativePlatform)
 
 val scip = crossProject(JSPlatform, JVMPlatform, NativePlatform)
   .crossType(CrossType.Pure)
-  .settings(commonSettings, version := "0.5.0")
+  .settings(commonSettings, version := "0.5.0", isSnapshot := false)
   .dependsOn(delay)
 
 val script = crossProject(JVMPlatform, NativePlatform)
   .crossType(CrossType.Pure)
-  .settings(commonSettings, version := "0.5.0")
+  .settings(commonSettings, version := "0.5.0", isSnapshot := false)
