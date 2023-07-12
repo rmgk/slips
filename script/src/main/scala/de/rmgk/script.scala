@@ -17,7 +17,7 @@ def deleteRecursive(path: Path): Unit = {
 
 class ProcessResultException(val code: Int) extends Exception
 
-implicit object extensions:
+implicit object syntax:
 
   extension (in: InputStream)
     def readToBAOS: ByteArrayOutputStream = {
