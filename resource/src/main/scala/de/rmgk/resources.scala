@@ -16,7 +16,7 @@ object resources {
 
   inline def collectResources[Result, Res <: Resource, Context <: ResourceContext[Res]](inline expr: Result)
       : (List[Res], Context => Result) =
-    ${ resourceMacro[Result, Res, Context]('expr) }
+    ${ resourceMacro[Result, Res, Context]('{expr}) }
 
   def resourceMacro[Res: Type, ReSource: Type, ResourceContext: Type](
       expr: Expr[Res]

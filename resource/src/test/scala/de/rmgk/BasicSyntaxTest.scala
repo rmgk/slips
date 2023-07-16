@@ -4,10 +4,6 @@ import de.rmgk.resources.*
 
 class BasicSyntaxTest extends munit.FunSuite {
 
-  case class Id[A](value: A) {
-    def zip[B](other: Id[B]): Id[(A, B)] = Id((value, other.value))
-  }
-
   class Box[T](val v: T) extends Resource { type Type = T }
 
   object BoxAccess extends ResourceContext[Box[_]] {

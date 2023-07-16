@@ -39,7 +39,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
     }
   }
 
-  inline def space: Scip[Boolean]      = " \r\n".any.rep.min(0)
+  inline def space: Scip[Boolean]      = " \t\r\n".any.rep.min(0)
   inline def digits: Scip[Int]         = "0123456789".any.rep
   inline def exponent: Scip[Boolean]   = "eE".any and "+-".any.opt and digits.min(1)
   inline def fractional: Scip[Boolean] = ".".any and digits.min(1)
