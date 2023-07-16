@@ -1,6 +1,6 @@
 package de.rmgk
 
-import de.rmgk.options.ParsedArguments.{ParseError, ParseException}
+import de.rmgk.options.ParsedArguments.{ParseException, ParseResult}
 import de.rmgk.resources.{Resource, ResourceContext, collectResources}
 
 import java.nio.file.Path
@@ -17,6 +17,7 @@ object options:
     given ArgumentParsers[Int]                                         = _.toIntOption
     given ArgumentParsers[Long]                                        = _.toLongOption
     given ArgumentParsers[Double]                                      = _.toDoubleOption
+    given ArgumentParsers[Boolean]                                     = _ => Some(true)
     given [T](using p: ArgumentParsers[T]): ArgumentParsers[Option[T]] = s => p.apply(s).map(Some.apply)
 
   enum Style:
@@ -39,22 +40,37 @@ object options:
   class RemainingArguments(name: String, description: String = "")
       extends Argument[List[String]](name, Style.Positional, description = description, default = Nil)(using _ => None)
 
-  inline def parseArguments[Res](parameters: List[String])(inline expr: Res): Either[ParseError, Res] =
+  inline def parseArguments[Res](parameters: List[String])(inline expr: Res): ParseResult[Res] =
     val (descriptors, handler) = collectResources[Res, Argument[_], ParsedArguments](expr)
-    try
-      val bound = ParsedArguments.rec(parameters, descriptors, Map.empty)
-      Right(handler(ParsedArguments(bound)))
-    catch
-      case ParseException(msg) =>
-        Left(ParseError(descriptors, msg))
+    executeParsing(parameters, descriptors, handler)
 
-  class ParsedArguments(bound: Map[Argument[_], Any]) extends ResourceContext[Argument[_]] {
+  def executeParsing[Res](parameters: List[String], descriptors: List[Argument[_]], handler: ParsedArguments => Res): ParseResult[Res] =
+    ParsedArguments.exec(parameters, descriptors, handler)
+
+  case class ParsedArguments(bound: Map[Argument[_], Any]) extends ResourceContext[Argument[_]] {
     override def accessResource(res: Argument[_]): res.Type =
       bound.get(res).orElse(Option(res.default)).map(_.asInstanceOf[res.Type]).getOrElse:
         throw ParseException(s"required argument »${res.name}« not provided")
   }
 
   object ParsedArguments {
+
+    def exec[Res](parameters: List[String], descriptors: List[Argument[_]], handler: ParsedArguments => Res): ParseResult[Res] =
+      try
+        val bound = ParsedArguments.rec(parameters, descriptors, Map.empty)
+        ParseResult(Right(handler(ParsedArguments(bound))))
+      catch
+        case ParseException(msg) =>
+          ParseResult(Left(ParseError(descriptors, msg)))
+
+    case class ParseResult[T](inner: Either[ParseError, T]):
+      def printHelp(): Unit =
+        inner match
+          case Left(pe) =>
+            println("commandline arguments:")
+            println(pe.formatHelp.indent(2))
+            println(s"\n  Note: ${pe.msg}")
+          case Right(value) => ()
 
     case class ParseError(descriptors: List[Argument[_]], msg: String):
       def formatHelp: String =
@@ -115,8 +131,11 @@ object options:
               case Some(arg) =>
                 if arg.isInstanceOf[RemainingArguments]
                 then
-                  rec(rest, descriptors, bound.updatedWith(arg): (curr: Option[Any]) =>
-                    Some(str :: curr.getOrElse(Nil).asInstanceOf[List[String]])
+                  rec(
+                    rest,
+                    descriptors,
+                    bound.updatedWith(arg): (curr: Option[Any]) =>
+                      Some(str :: curr.getOrElse(Nil).asInstanceOf[List[String]])
                   )
                 else
                   val remdesc = descriptors.filterNot(_ == arg)
