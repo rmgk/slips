@@ -9,7 +9,7 @@ class OptionsTest extends munit.FunSuite {
 
   test("basic"):
 
-    val a = Argument[Path]("file", Style.Named, "the important file", Path.of("/tmp"))
+    val a = Argument[String]("file", Style.Named, "the important file", "/tmp")
     val b = Argument[String]("content", Style.Positional, "random content")
 
     val res = parseArguments(List("--file", "/a/test/", "this is a test")) {
