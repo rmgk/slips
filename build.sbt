@@ -32,20 +32,16 @@ val category = crossProject(JSPlatform, JVMPlatform, NativePlatform)
 
 val resource = crossProject(JSPlatform, JVMPlatform, NativePlatform)
   .crossType(CrossType.Pure)
-  .settings(commonSettings, version := "0.5.0", isSnapshot := false)
+  .settings(commonSettings, version := "0.5.0", isSnapshot := true)
 
 val options = crossProject(JSPlatform, JVMPlatform, NativePlatform)
   .crossType(CrossType.Pure)
-  .settings(commonSettings, libraryDependencies += scopt.value, version := "0.6.0", isSnapshot := false)
-  .jsSettings(
-    // seems to be required to run JS tests on node
-    Test / scalaJSLinkerConfig ~= { _.withModuleKind(ModuleKind.CommonJSModule) }
-  )
+  .settings(commonSettings, version := "0.6.0", isSnapshot := true)
   .dependsOn(resource)
 
 val datalog = crossProject(JSPlatform, JVMPlatform, NativePlatform)
   .crossType(CrossType.Pure)
-  .settings(commonSettings, noPublish, version := "0.5.0")
+  .settings(commonSettings, version := "0.5.0", isSnapshot := true, noPublish)
 
 val delay = crossProject(JSPlatform, JVMPlatform, NativePlatform)
   .crossType(CrossType.Pure)
