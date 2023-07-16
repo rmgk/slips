@@ -117,7 +117,7 @@ object options:
                     rest match
                       case Nil => throw ParseException("flag needs argument")
                       case argstr :: rest =>
-                        arg.parser(str) match
+                        arg.parser(argstr) match
                           case None => throw ParseException(
                               s"could not parse »$str $argstr« as ${arg.ct.runtimeClass.getSimpleName}"
                             )

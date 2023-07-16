@@ -26,4 +26,13 @@ class OptionsTest extends munit.FunSuite {
 
     assertEquals(res.inner, Right(5))
 
+
+  test("success"):
+    val res = parseArguments(List("--file", "/a/test/", "this is a test")):
+      val a = Argument[String]("file", Style.Named, "the important file", "/tmp").value
+      val b = Argument[String]("content", Style.Positional, "random content").value
+      (a, b)
+
+    assertEquals(res.inner, Right(("/a/test/", "this is a test")))
+
 }
