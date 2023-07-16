@@ -110,13 +110,12 @@ object resources {
 
       val res = ValDef.let(Symbol.spliceOwner, found) { defs =>
         val replacementMap = found.zip(defs).toMap
-        // val rdef = DefDef(exprSym, {params =>
         val rdef = Lambda(
           Symbol.spliceOwner,
           funType,
           { (sym, params) =>
             val ctx = params.head.asInstanceOf[Term]
-            ReplaceInterp(replacementMap, ctx).transformTree(expr.asTerm)(sym)
+            ReplaceInterp(replacementMap, ctx).transformTree(expr.asTerm)(sym).changeOwner(sym)
           }
         )
 
