@@ -1,10 +1,9 @@
 #!/usr/bin/env -S scala-cli shebang
 
 //> using scala "3.3.0"
-//> using lib "de.rmgk.slips::script:0.4.8"
-//> using lib "de.rmgk.slips::options:0.4.7"
+//> using lib "de.rmgk.slips::script:0.5.0"
 
-import de.rmgk.script.extensions
+import de.rmgk.script.syntax
 
 val projects = Map(
   "category" -> Set("JS", "JVM", "Native"),
