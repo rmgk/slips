@@ -41,7 +41,7 @@ object options:
       extends Argument[List[String]](name, Style.Positional, description = description, default = Nil)(using _ => None)
 
   inline def parseArguments[Res](parameters: List[String])(inline expr: Res): ParseResult[Res] =
-    val (descriptors, handler) = collectResources[Res, Argument[_], ParsedArguments](expr)
+    val (descriptors, handler) = collectResources[Res, de.rmgk.options.Argument[_], de.rmgk.options.ParsedArguments](expr)
     executeParsing(parameters, descriptors, handler)
 
   def executeParsing[Res](parameters: List[String], descriptors: List[Argument[_]], handler: ParsedArguments => Res): ParseResult[Res] =
