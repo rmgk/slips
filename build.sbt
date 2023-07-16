@@ -32,11 +32,11 @@ val category = crossProject(JSPlatform, JVMPlatform, NativePlatform)
 
 val resource = crossProject(JSPlatform, JVMPlatform, NativePlatform)
   .crossType(CrossType.Pure)
-  .settings(commonSettings, version := "0.5.0-SNAPSHOT", isSnapshot := true)
+  .settings(commonSettings, version := "0.5.0", isSnapshot := false)
 
 val options = crossProject(JSPlatform, JVMPlatform, NativePlatform)
   .crossType(CrossType.Pure)
-  .settings(commonSettings, libraryDependencies += scopt.value, version := "0.5.1-SNAPSHOT", isSnapshot := true)
+  .settings(commonSettings, libraryDependencies += scopt.value, version := "0.6.0", isSnapshot := false)
   .jsSettings(
     // seems to be required to run JS tests on node
     Test / scalaJSLinkerConfig ~= { _.withModuleKind(ModuleKind.CommonJSModule) }
