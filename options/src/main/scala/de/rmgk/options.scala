@@ -38,7 +38,7 @@ object options:
   }
 
   class RemainingArguments(name: String, description: String = "")
-      extends Argument[List[String]](name, Style.Positional, description = description, default = Nil)(using _ => None)
+      extends Argument[List[String]](name, Style.Positional, description = description, default = Nil)(using _ => None, summon)
 
   inline def parseArguments[Res](parameters: List[String])(inline expr: Res): ParseResult[Res] =
     val (descriptors, handler) = collectResources[Res, de.rmgk.options.Argument[_], de.rmgk.options.ParsedArguments](expr)
