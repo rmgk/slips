@@ -16,7 +16,7 @@ object resources {
 
   inline def collectResources[Result, Res <: Resource, Context <: ResourceContext[Res]](inline expr: Result)
       : (List[Res], Context => Result) =
-    ${ resourceMacro[Result, Res, Context]('{expr}) }
+    ${ resourceMacro[Result, Res, Context]('{ expr }) }
 
   def resourceMacro[Res: Type, ReSource: Type, ResourceContext: Type](
       expr: Expr[Res]
@@ -53,19 +53,24 @@ object resources {
           tree: quotes.reflect.Tree
       )(owner: quotes.reflect.Symbol): (List[quotes.reflect.Term], Boolean) = {
 
+        def handleFind(x: Term): (List[Term], Boolean) =
+          val before = acc._1
+          val res    = foldTree((Nil, true), x)(owner)
+          // we do not find things with nested things inside
+          if (res._1.nonEmpty) then (before, false)
+          else (x :: before, acc._2)
+
         if !tree.isExpr then foldOverTree(acc, tree)(owner)
         else
           tree.asExpr match
-            case '{ (${ x }: Resource).value } =>
-              val res    = foldTree((Nil, true), x.asTerm)(owner)
-              // we do not find things with nested things inside
-              if (res._1.nonEmpty) then (acc._1, false)
-              else (x.asTerm :: acc._1, acc._2)
-            case _ => foldOverTree(acc, tree)(owner)
+            case '{ (${ x }: Resource).value } => handleFind(x.asTerm)
+            case _                             => foldOverTree(acc, tree)(owner)
+
       }
     }
 
     class ReplaceInterp(replacement: Map[Term, Term], ticket: Term) extends TreeMap {
+
       override def transformTerm(tree: quotes.reflect.Term)(owner: quotes.reflect.Symbol): quotes.reflect.Term = {
         def replaceAccess(xy: Term): Term = {
           replacement.get(xy) match
@@ -77,7 +82,7 @@ object resources {
           end match
         }
 
-        val res = if (!tree.isExpr) then super.transformTerm(tree)(owner)
+        val res = if !tree.isExpr then super.transformTerm(tree)(owner)
         else
           tree.asExpr match {
             case '{ (${ xy }: Resource).value } => replaceAccess(xy.asTerm)
@@ -90,7 +95,6 @@ object resources {
     def getResources[Res: Type](expr: Expr[Res]): Expr[Any] = {
       val fi                = FindResource().foldTree((Nil, true), expr.asTerm)(Symbol.spliceOwner)
       val foundAbstractions = fi._1
-      //val foundStatic       = fi._2
       val definitions       = FindDefs().foldTree(Nil, expr.asTerm)(Symbol.spliceOwner)
 
       val found = foundAbstractions.filterNot { fa =>
