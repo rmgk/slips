@@ -15,7 +15,15 @@ class OptionsTest extends munit.FunSuite {
     val res = parseArguments(List("--file", "/a/test/", "this is a test")) {
       (a.value, b.value, Argument[String]("hey-chala", Style.Named).value)
     }
+    assert(res.inner.isLeft, res)
 
-    assert(res.isLeft)
+  test("advanced"):
+    val res = parseArguments(List("17")) {
+      val x = 5
+      Argument[Int]("test", Style.Positional).value
+      x
+    }
+
+    assertEquals(res.inner, Right(5))
 
 }
