@@ -1,4 +1,4 @@
-import de.rmgk.script.{extensions, ProcessResultException}
+import de.rmgk.script.{syntax, ProcessResultException}
 
 import java.io.IOException
 import java.nio.file.Paths
