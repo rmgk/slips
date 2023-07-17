@@ -86,7 +86,7 @@ object options:
             case Style.Positional => s"<${desc.name}: ${desc.ct.runtimeClass.getSimpleName}>"
             case Style.Flag       => s"--${desc.name}"
         val maxline = lines.map(_.size).maxOption.getOrElse(0)
-        lines.zip(ordered).map: (l, d) =>
+        lines.lazyZip(ordered).map: (l, d) =>
           val res =
             if d.description.nonEmpty
             then s"%-${maxline}s   %s".format(l, d.description)
