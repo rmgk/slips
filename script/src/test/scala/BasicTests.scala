@@ -1,12 +1,12 @@
-import de.rmgk.script.{syntax, ProcessResultException}
+import de.rmgk.script.{ProcessResultException, syntax}
 
-import java.io.IOException
-import java.nio.file.Paths
+import java.io.{ByteArrayOutputStream, IOException}
+import java.nio.file.{Files, Path}
 
 class BasicTests extends munit.FunSuite {
   test("list files") {
     import scala.language.unsafeNulls
-    val path = Paths.get(".").toAbsolutePath
+    val path = Path.of(".").toAbsolutePath
     val res  = process"ls ${path.toString}".run()
   }
 
@@ -21,7 +21,7 @@ class BasicTests extends munit.FunSuite {
 
   test("sequence arguments") {
     import scala.language.unsafeNulls
-    val path = Paths.get(".").toAbsolutePath
+    val path = Path.of(".").toAbsolutePath
     val res  = process"${List("ls", path)}".run()
   }
 

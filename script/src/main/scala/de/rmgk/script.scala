@@ -1,44 +1,30 @@
 package de.rmgk.script
 
-import java.io.{ByteArrayOutputStream, InputStream, OutputStream}
+import java.io.{ByteArrayOutputStream, InputStream}
 import java.lang.ProcessBuilder.Redirect
 import java.nio.charset.StandardCharsets
 import java.nio.file.{Files, LinkOption, Path}
-import scala.annotation.tailrec
 import scala.jdk.CollectionConverters.*
 import scala.language.implicitConversions
 import scala.util.Using
 
-def deleteRecursive(path: Path): Unit = {
+def deleteRecursive(path: Path): Unit =
+  import scala.language.unsafeNulls
   if Files.isDirectory(path, LinkOption.NOFOLLOW_LINKS)
-  then Files.list(path).nn.iterator().nn.asScala.toSeq.foreach(deleteRecursive)
+  then Files.list(path).iterator().asScala.toSeq.foreach(deleteRecursive)
   Files.delete(path)
-}
 
 class ProcessResultException(val code: Int) extends Exception
 
 implicit object syntax:
 
   extension (in: InputStream)
-    def readToBAOS: ByteArrayOutputStream = {
-      val bo = new ByteArrayOutputStream()
-      in.pipeTo(bo)
+    def readToBAOS: ByteArrayOutputStream =
+      val bo = new ByteArrayOutputStream(128)
+      in.transferTo(bo)
       bo
-    }
     def readToByteArray: Array[Byte] = in.readToBAOS.toByteArray.nn
     def readToString: String         = in.readToBAOS.toString(StandardCharsets.UTF_8)
-    /* this is essentially in.transferTo, but also works on scala native */
-    def pipeTo(out: OutputStream): Unit = {
-      inline val bufferSize = 1<<13 // 8k similar to JDK buffer size constant
-      val buffer = new Array[Byte](bufferSize)
-
-      @tailrec def rec(): Unit =
-        val read = in.read(buffer, 0, bufferSize)
-        if (read >= 0)
-          out.write(buffer, 0, read)
-          rec()
-      rec()
-    }
 
   extension (p: Process)
     @throws[ProcessResultException]
