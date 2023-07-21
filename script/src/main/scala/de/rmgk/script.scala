@@ -30,7 +30,6 @@ implicit object syntax:
     /* this is essentially in.transferTo, but also works on scala native */
     def pipeTo(out: OutputStream): Unit = {
       inline val bufferSize = 1<<13 // 8k similar to JDK buffer size constant
-      in.transferTo(out)
       val buffer = new Array[Byte](bufferSize)
 
       @tailrec def rec(): Unit =
