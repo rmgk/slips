@@ -25,14 +25,22 @@ object options:
     given ArgumentValueParser[Double] = one(_.toDoubleOption)
     given ArgumentValueParser[Boolean] = new:
       def apply(str: List[String]): (Option[Boolean], List[String]) = (Some(true), str)
-      def valueDescription = ""
+      def valueDescription                                          = ""
     given [T: ClassTag](using p: ArgumentValueParser[T]): ArgumentValueParser[Option[T]] = new:
       def apply(args: List[String]): (Option[Option[T]], List[String]) =
         val (value, rest) = p.apply(args)
         (value.map(Some.apply), rest)
       def valueDescription = s"Option(${p.valueDescription})"
+
+    def subcommandParser[T](argumentsParser: ArgumentsParser[T]): ArgumentValueParser[T] = new ArgumentValueParser[T] {
+      override def apply(args: List[String]): (Option[T], List[String]) =
+        val (value, res) = argumentsParser.parseUnsafe(args)
+        (Some(value), res)
+      override def valueDescription: String = ???
+    }
+  end ArgumentValueParser
   def positional[T: ArgumentValueParser](hint: String, description: String, default: T | Null = null): Argument[T] =
-    Argument("", s"<$hint>",  description, default)
+    Argument("", s"<$hint>", description, default)
   def named[T: ArgumentValueParser](key: String, description: String, default: T | Null = null): Argument[T] =
     Argument(key, key, description, default)
 
@@ -55,23 +63,34 @@ object options:
   inline def parseArguments[Res](parameters: List[String])(inline expr: Res): ParseResult[Res] =
     argumentParser(expr).parse(parameters)
 
+  inline def subprogram[Res](name: String)(inline expr: Res) =
+    val parser = argumentParser(expr)
+    Argument(name, name, "", null)(using ArgumentValueParser.subcommandParser(parser))
+
   case class ArgumentsParser[Res](descriptors: List[Argument[_]], handler: ArgumentContext => Res):
     def parse(parameters: List[String]): ParseResult[Res] =
       try
-        val bound = rec(parameters, descriptors, Map.empty)
-        ParseResult(Right(handler(ArgumentContext(bound))))
+        val (result, remaining) = parseUnsafe(parameters)
+        if remaining.isEmpty
+        then ParseResult(Right(result))
+        else ParseResult(Left(ParseError(descriptors, s"unhandled arguments: $remaining")))
       catch
         case ParseException(msg) =>
           ParseResult(Left(ParseError(descriptors, msg)))
+
+    def parseUnsafe(parameters: List[String]): (Res, List[String]) | Nothing =
+      val (bound, rem) = rec(parameters, descriptors, Map.empty)
+      (handler(ArgumentContext(bound)), rem)
 
     @tailrec
     final def rec(
         remaining: List[String],
         descriptors: List[Argument[_]],
         bound: Map[Argument[_], Any]
-    ): Map[Argument[_], Any] =
+    ): (Map[Argument[_], Any], List[String]) =
+      if descriptors.isEmpty then return (bound, remaining)
       remaining match
-        case Nil => bound
+        case Nil => (bound, Nil)
         case str :: rest =>
           descriptors.find(_.key == str).orElse(descriptors.find(_.key == "")) match
             case None => throw ParseException(s"unexpected argument: »$str«")
