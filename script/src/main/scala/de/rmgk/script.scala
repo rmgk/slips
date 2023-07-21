@@ -40,11 +40,6 @@ implicit object syntax:
       rec()
     }
 
-  extension (path: Path)
-    def readToString: String =
-      // read string not present on native :(
-      new String(Files.readAllBytes(path), StandardCharsets.UTF_8)
-
   extension (p: Process)
     @throws[ProcessResultException]
     def resultString(): String =
@@ -63,7 +58,10 @@ implicit object syntax:
       process.waitFor()
       process.resultString()
 
-    def runPrint(): Unit = println(run())
+    def runPrint(): Int =
+      import scala.language.unsafeNulls
+      pb.inheritIO().start().waitFor()
+
   end extension
 
   type CommandPart = String | Path | Long | Int | Char
