@@ -125,7 +125,7 @@ object options:
 
   object ParseError:
     def formatHelp(descriptors: List[Argument[_]]): String =
-      val ordered = descriptors.sortBy(_.key)
+      val ordered = descriptors.reverse
 
       val lines = ordered.map: desc =>
         s"${desc.hint} ${desc.parser.valueDescription}"
