@@ -15,7 +15,7 @@ class OptionsTest extends munit.FunSuite {
     val res = parseArguments(List("--file", "/a/test/", "this is a test")) {
       (a.value, b.value, named[String]("hey-chala", "some key").value)
     }
-    res.printHelp()
+    //res.printHelp()
     assert(res.inner.isLeft, res)
 
   test("advanced"):
@@ -37,4 +37,22 @@ class OptionsTest extends munit.FunSuite {
 
     assertEquals(res.inner, Right(("/a/test/", "this is a test", true)))
 
+
+  test("subcommands"):
+    val res = parseArguments(List("test", "--file", "/a/test")):
+
+      val sc1 = subcommand("run", "just run"):
+        val b: String = named("--output", "output path").value
+      .value
+
+      val sc2 = subcommand("test", "run tests"):
+        val a: String = named("--file", "path to test").value
+        a
+      .value
+
+
+
+      (sc1, sc2)
+
+    assertEquals(res.inner, Right((None,Some("/a/test"))))
 }

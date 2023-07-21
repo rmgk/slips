@@ -32,11 +32,12 @@ object options:
         (value.map(Some.apply), rest)
       def valueDescription = s"Option(${p.valueDescription})"
 
-    def subcommandParser[T](argumentsParser: ArgumentsParser[T]): ArgumentValueParser[T] = new ArgumentValueParser[T] {
-      override def apply(args: List[String]): (Option[T], List[String]) =
+    def subcommandParser[T](argumentsParser: ArgumentsParser[T], description: String): ArgumentValueParser[Option[T]] = new ArgumentValueParser[Option[T]] {
+      override def apply(args: List[String]): (Option[Option[T]], List[String]) =
         val (value, res) = argumentsParser.parseUnsafe(args)
-        (Some(value), res)
-      override def valueDescription: String = ???
+        (Some(Some(value)), res)
+      override def valueDescription: String =
+        s"– $description\n" + ParseError.formatHelp(argumentsParser.descriptors).indent(2)
     }
   end ArgumentValueParser
   def positional[T: ArgumentValueParser](hint: String, description: String, default: T | Null = null): Argument[T] =
@@ -63,9 +64,9 @@ object options:
   inline def parseArguments[Res](parameters: List[String])(inline expr: Res): ParseResult[Res] =
     argumentParser(expr).parse(parameters)
 
-  inline def subprogram[Res](name: String)(inline expr: Res) =
+  inline def subcommand[Res](name: String, description: String)(inline expr: Res) =
     val parser = argumentParser(expr)
-    Argument(name, name, "", null)(using ArgumentValueParser.subcommandParser(parser))
+    Argument(name, name, "", None)(using ArgumentValueParser.subcommandParser(parser, description))
 
   case class ArgumentsParser[Res](descriptors: List[Argument[_]], handler: ArgumentContext => Res):
     def parse(parameters: List[String]): ParseResult[Res] =
@@ -118,7 +119,10 @@ object options:
         case Right(value) => ()
 
   case class ParseError(descriptors: List[Argument[_]], msg: String):
-    def formatHelp: String =
+    def formatHelp = ParseError.formatHelp(descriptors)
+
+  object ParseError:
+    def formatHelp(descriptors: List[Argument[_]]): String =
       val ordered = descriptors.sortBy(_.key)
 
       val lines = ordered.map: desc =>
@@ -133,7 +137,6 @@ object options:
         then res
         else s"$res\n  (default: ${d.default})"
       .mkString("\n")
-    end formatHelp
 
   case class ParseException(msg: String) extends Exception(msg, null, false, false)
 
