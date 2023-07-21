@@ -1,6 +1,6 @@
 package de.rmgk
 
-import de.rmgk.options.ParsedArguments.{ParseException, ParseResult}
+import de.rmgk.options.ArgumentContext.{ParseException, ParseResult}
 import de.rmgk.resource.{Resource, ResourceContext, collectResources}
 
 import java.nio.file.Path
@@ -9,16 +9,16 @@ import scala.reflect.ClassTag
 object options:
 
   @FunctionalInterface
-  trait ArgumentParsers[T]:
+  trait ArgumentParser[T]:
     def apply(str: String): Option[T]
-  object ArgumentParsers:
-    given ArgumentParsers[Path]                                        = s => Some(Path.of(s).nn)
-    given ArgumentParsers[String]                                      = Some.apply
-    given ArgumentParsers[Int]                                         = _.toIntOption
-    given ArgumentParsers[Long]                                        = _.toLongOption
-    given ArgumentParsers[Double]                                      = _.toDoubleOption
-    given ArgumentParsers[Boolean]                                     = _ => Some(true)
-    given [T](using p: ArgumentParsers[T]): ArgumentParsers[Option[T]] = s => p.apply(s).map(Some.apply)
+  object ArgumentParser:
+    given ArgumentParser[Path]                                       = s => Some(Path.of(s).nn)
+    given ArgumentParser[String]                                     = Some.apply
+    given ArgumentParser[Int]                                        = _.toIntOption
+    given ArgumentParser[Long]                                       = _.toLongOption
+    given ArgumentParser[Double]                                     = _.toDoubleOption
+    given ArgumentParser[Boolean]                                    = _ => Some(true)
+    given [T](using p: ArgumentParser[T]): ArgumentParser[Option[T]] = s => p.apply(s).map(Some.apply)
 
   enum Style:
     case Named
@@ -31,34 +31,46 @@ object options:
       description: String = "",
       default: T | Null = null
   )(using
-      val parser: ArgumentParsers[T],
+      val parser: ArgumentParser[T],
       val ct: ClassTag[T]
   ) extends Resource {
     type Type = T
   }
 
   class RemainingArguments(name: String, description: String = "")
-      extends Argument[List[String]](name, Style.Positional, description = description, default = Nil)(using _ => None, summon)
+      extends Argument[List[String]](name, Style.Positional, description = description, default = Nil)(using
+        _ => None,
+        summon
+      )
 
   inline def parseArguments[Res](parameters: List[String])(inline expr: Res): ParseResult[Res] =
-    val (descriptors, handler) = collectResources[Res, de.rmgk.options.Argument[_], de.rmgk.options.ParsedArguments](expr)
+    val (descriptors, handler) =
+      collectResources[Res, de.rmgk.options.Argument[_], de.rmgk.options.ArgumentContext](expr)
     executeParsing(parameters, descriptors, handler)
 
-  def executeParsing[Res](parameters: List[String], descriptors: List[Argument[_]], handler: ParsedArguments => Res): ParseResult[Res] =
-    ParsedArguments.exec(parameters, descriptors, handler)
+  def executeParsing[Res](
+      parameters: List[String],
+      descriptors: List[Argument[_]],
+      handler: ArgumentContext => Res
+  ): ParseResult[Res] =
+    ArgumentContext.exec(parameters, descriptors, handler)
 
-  case class ParsedArguments(bound: Map[Argument[_], Any]) extends ResourceContext[Argument[_]] {
+  case class ArgumentContext(bound: Map[Argument[_], Any]) extends ResourceContext[Argument[_]] {
     override def accessResource(res: Argument[_]): res.Type =
       bound.get(res).orElse(Option(res.default)).map(_.asInstanceOf[res.Type]).getOrElse:
         throw ParseException(s"required argument »${res.name}« not provided")
   }
 
-  object ParsedArguments {
+  object ArgumentContext {
 
-    def exec[Res](parameters: List[String], descriptors: List[Argument[_]], handler: ParsedArguments => Res): ParseResult[Res] =
+    def exec[Res](
+        parameters: List[String],
+        descriptors: List[Argument[_]],
+        handler: ArgumentContext => Res
+    ): ParseResult[Res] =
       try
-        val bound = ParsedArguments.rec(parameters, descriptors, Map.empty)
-        ParseResult(Right(handler(ParsedArguments(bound))))
+        val bound = ArgumentContext.rec(parameters, descriptors, Map.empty)
+        ParseResult(Right(handler(ArgumentContext(bound))))
       catch
         case ParseException(msg) =>
           ParseResult(Left(ParseError(descriptors, msg)))
