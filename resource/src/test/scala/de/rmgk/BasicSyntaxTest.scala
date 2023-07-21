@@ -21,7 +21,7 @@ class BasicSyntaxTest extends munit.FunSuite {
       a.value + b.value
     }
 
-    assertEquals(boxes, List(b, a))
+    assertEquals(boxes, List(a, b))
     assertEquals(fun(BoxAccess), 5)
 
   }
