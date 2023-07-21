@@ -9,18 +9,19 @@ class OptionsTest extends munit.FunSuite {
 
   test("basic"):
 
-    val a = Argument[String]("file", Style.Named, "the important file", "/tmp")
-    val b = Argument[String]("content", Style.Positional, "random content")
+    val a = named[String]("--file", "the important file", "/tmp")
+    val b = positional[String]("content", "random content")
 
     val res = parseArguments(List("--file", "/a/test/", "this is a test")) {
-      (a.value, b.value, Argument[String]("hey-chala", Style.Named).value)
+      (a.value, b.value, named[String]("hey-chala", "some key").value)
     }
+    res.printHelp()
     assert(res.inner.isLeft, res)
 
   test("advanced"):
     val res = parseArguments(List("17")) {
       val x = 5
-      Argument[Int]("test", Style.Positional).value
+      positional[Int]("int", "some arg").value
       x
     }
 
@@ -28,11 +29,12 @@ class OptionsTest extends munit.FunSuite {
 
 
   test("success"):
-    val res = parseArguments(List("--file", "/a/test/", "this is a test")):
-      val a = Argument[String]("file", Style.Named, "the important file", "/tmp").value
-      val b = Argument[String]("content", Style.Positional, "random content").value
-      (a, b)
+    val res = parseArguments(List("--file", "/a/test/", "this is a test", "--verbose")):
+      val a = named[String]("--file", "the important file", "/tmp").value
+      val b = positional[String]("content", "random content").value
+      val c = named[Boolean]("--verbose", "make output more verbose").value
+      (a, b, c)
 
-    assertEquals(res.inner, Right(("/a/test/", "this is a test")))
+    assertEquals(res.inner, Right(("/a/test/", "this is a test", true)))
 
 }
