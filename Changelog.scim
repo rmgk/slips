@@ -1,6 +1,14 @@
 = Changelog
 
 
+== v0.6.1-options
+
+• rewrite DSL to support subcommands
+
+== v0.5.1-resource
+
+• fix package name to match project name
+
 == v0.6.0-options
 
 • completely custom option parsing integrating with resource
