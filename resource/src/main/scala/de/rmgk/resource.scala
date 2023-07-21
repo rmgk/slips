@@ -121,7 +121,7 @@ object resource {
 
         '{
           (
-            List.from(${ Expr.ofList(defs.map(_.asExprOf[ReSource])) }),
+            List.from(${ Expr.ofList(defs.map(_.asExprOf[ReSource]).reverse) }),
             ${ rdef.asExprOf[ResourceContext => Res] }
           )
         }.asTerm

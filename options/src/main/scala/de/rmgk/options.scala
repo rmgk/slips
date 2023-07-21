@@ -32,13 +32,14 @@ object options:
         (value.map(Some.apply), rest)
       def valueDescription = s"Option(${p.valueDescription})"
 
-    def subcommandParser[T](argumentsParser: ArgumentsParser[T], description: String): ArgumentValueParser[Option[T]] = new ArgumentValueParser[Option[T]] {
-      override def apply(args: List[String]): (Option[Option[T]], List[String]) =
-        val (value, res) = argumentsParser.parseUnsafe(args)
-        (Some(Some(value)), res)
-      override def valueDescription: String =
-        s"– $description\n" + ParseError.formatHelp(argumentsParser.descriptors).indent(2)
-    }
+    def subcommandParser[T](argumentsParser: ArgumentsParser[T], description: String): ArgumentValueParser[Option[T]] =
+      new ArgumentValueParser[Option[T]] {
+        override def apply(args: List[String]): (Option[Option[T]], List[String]) =
+          val (value, res) = argumentsParser.parseUnsafe(args)
+          (Some(Some(value)), res)
+        override def valueDescription: String =
+          s"– $description\n" + ParseError.formatHelp(argumentsParser.descriptors).indent(2)
+      }
   end ArgumentValueParser
   def positional[T: ArgumentValueParser](hint: String, description: String, default: T | Null = null): Argument[T] =
     Argument("", s"<$hint>", description, default)
@@ -125,7 +126,7 @@ object options:
 
   object ParseError:
     def formatHelp(descriptors: List[Argument[_]]): String =
-      val ordered = descriptors.reverse
+      val ordered = descriptors
 
       val lines = ordered.map: desc =>
         s"${desc.hint} ${desc.parser.valueDescription}"

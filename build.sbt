@@ -32,11 +32,11 @@ val category = crossProject(JSPlatform, JVMPlatform, NativePlatform)
 
 val resource = crossProject(JSPlatform, JVMPlatform, NativePlatform)
   .crossType(CrossType.Pure)
-  .settings(commonSettings, version := "0.5.1", isSnapshot := false)
+  .settings(commonSettings, version := "0.7.0-SNAPSHOT", isSnapshot := true)
 
 val options = crossProject(JSPlatform, JVMPlatform, NativePlatform)
   .crossType(CrossType.Pure)
-  .settings(commonSettings, version := "0.6.1", isSnapshot := false)
+  .settings(commonSettings, version := "0.7.0-SNAPSHOT", isSnapshot := true)
   .dependsOn(resource)
 
 val datalog = crossProject(JSPlatform, JVMPlatform, NativePlatform)
@@ -54,4 +54,4 @@ val scip = crossProject(JSPlatform, JVMPlatform, NativePlatform)
 
 val script = crossProject(JVMPlatform, NativePlatform)
   .crossType(CrossType.Pure)
-  .settings(commonSettings, version := "0.5.0", isSnapshot := false)
+  .settings(commonSettings, version := "0.7.0-SNAPSHOT", isSnapshot := true)

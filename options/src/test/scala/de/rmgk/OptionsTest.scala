@@ -55,4 +55,15 @@ class OptionsTest extends munit.FunSuite {
       (sc1, sc2)
 
     assertEquals(res.inner, Right((None,Some("/a/test"))))
+
+
+  test("order test"):
+    val res = parseArguments(List("a", "b", "c", "d")):
+      val a = positional[String]("a", "a").value
+      val b = positional[String]("b", "b").value
+      val c = positional[String]("c", "c").value
+      val d = positional[String]("d", "d").value
+      (a, b, c, d)
+
+    assertEquals(res.inner, Right(("a", "b", "c", "d")))
 }
