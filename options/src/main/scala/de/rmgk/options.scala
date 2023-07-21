@@ -108,7 +108,7 @@ object options:
   case class ArgumentContext(bound: Map[Argument[_], Any]) extends ResourceContext[Argument[_]] {
     override def accessResource(res: Argument[_]): res.Type =
       bound.get(res).orElse(Option(res.default)).map(_.asInstanceOf[res.Type]).getOrElse:
-        throw ParseException(s"required argument »${res.key}« not provided")
+        throw ParseException(s"required argument »${res.hint}« not provided")
   }
 
   case class ParseResult[T](inner: Either[ParseError, T]):
