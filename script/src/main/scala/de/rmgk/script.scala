@@ -52,13 +52,12 @@ implicit object syntax:
 
   type CommandPart = String | Path | Long | Int | Char
   extension (sc: StringContext)
-    def process(args: (CommandPart | Iterable[CommandPart])*): ProcessBuilder = {
-      val components = sc.parts.iterator.zipAll(args, "", List.empty[String]).flatMap { (part, arg) =>
+    def process(args: (CommandPart | Iterable[CommandPart])*): ProcessBuilder =
+      val components = sc.parts.iterator.zipAll(args, "", List.empty[String]).flatMap: (part, arg) =>
         import scala.language.unsafeNulls
         val parts = arg match
           case s: Iterable[_]     => s.map(_.toString)
           case other: CommandPart => Seq(other.toString())
         part.split("\\s").iterator.concat(parts)
-      }.filter(s => !s.isBlank).toVector
+      .filter(s => !s.isBlank).toVector
       new ProcessBuilder(components.asJava)
-    }

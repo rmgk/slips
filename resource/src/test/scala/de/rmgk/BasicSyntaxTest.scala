@@ -2,7 +2,7 @@ package de.rmgk
 
 import de.rmgk.resource.*
 
-class BasicSyntaxTest extends munit.FunSuite {
+class BasicSyntaxTest extends munit.FunSuite:
 
   class Box[T](val v: T) extends Resource { type Type = T }
 
@@ -12,18 +12,12 @@ class BasicSyntaxTest extends munit.FunSuite {
 
   inline def collect[Res](inline expr: Res): (List[Box[_]], BoxAccess.type => Res) = collectResources(expr)
 
-  test("basic syntax") {
-
+  test("basic syntax"):
     val a = Box(2)
     val b = Box(3)
 
-    val (boxes, fun) = collect {
+    val (boxes, fun) = collect:
       a.value + b.value
-    }
 
     assertEquals(boxes, List(a, b))
     assertEquals(fun(BoxAccess), 5)
-
-  }
-
-}
