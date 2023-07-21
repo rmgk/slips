@@ -32,11 +32,11 @@ val category = crossProject(JSPlatform, JVMPlatform, NativePlatform)
 
 val resource = crossProject(JSPlatform, JVMPlatform, NativePlatform)
   .crossType(CrossType.Pure)
-  .settings(commonSettings, version := "0.5.1-SNAPSHOT", isSnapshot := true)
+  .settings(commonSettings, version := "0.5.1", isSnapshot := false)
 
 val options = crossProject(JSPlatform, JVMPlatform, NativePlatform)
   .crossType(CrossType.Pure)
-  .settings(commonSettings, version := "0.6.1-SNAPSHOT", isSnapshot := true)
+  .settings(commonSettings, version := "0.6.1", isSnapshot := false)
   .dependsOn(resource)
 
 val datalog = crossProject(JSPlatform, JVMPlatform, NativePlatform)
