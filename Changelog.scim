@@ -1,6 +1,17 @@
 = Changelog
 
 
+== v0.7.0
+
+• change version style again, try to globally increase
+
+• Resource
+	• return resources in definition order, not reversed
+
+• Script
+	• remove no longer needed definitions (after fixing some bugs therein)
+
+
 == v0.6.1-options
 
 • rewrite DSL to support subcommands
