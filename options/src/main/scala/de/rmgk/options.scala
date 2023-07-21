@@ -9,12 +9,14 @@ import scala.reflect.ClassTag
 object options:
 
   @FunctionalInterface
-  trait ArgumentValueParser[T](using val ct: ClassTag[T]):
+  trait ArgumentValueParser[T]:
     def apply(args: List[String]): (Option[T], List[String])
+    def valueDescription: String
   object ArgumentValueParser:
-    def one[T: ClassTag](p: String => Option[T]): ArgumentValueParser[T] = new:
+    def one[T](p: String => Option[T])(using ct: ClassTag[T]): ArgumentValueParser[T] = new:
       def apply(args: List[String]): (Option[T], List[String]) =
         (p(args.head), args.tail)
+      def valueDescription: String = ct.runtimeClass.getSimpleName.nn
 
     given ArgumentValueParser[Path]   = one(s => Some(Path.of(s).nn))
     given ArgumentValueParser[String] = one(Some.apply)
@@ -23,11 +25,12 @@ object options:
     given ArgumentValueParser[Double] = one(_.toDoubleOption)
     given ArgumentValueParser[Boolean] = new:
       def apply(str: List[String]): (Option[Boolean], List[String]) = (Some(true), str)
+      def valueDescription = ""
     given [T: ClassTag](using p: ArgumentValueParser[T]): ArgumentValueParser[Option[T]] = new:
       def apply(args: List[String]): (Option[Option[T]], List[String]) =
         val (value, rest) = p.apply(args)
         (value.map(Some.apply), rest)
-
+      def valueDescription = s"Option(${p.valueDescription})"
   def positional[T: ArgumentValueParser](hint: String, description: String, default: T | Null = null): Argument[T] =
     Argument("", s"<$hint>",  description, default)
   def named[T: ArgumentValueParser](key: String, description: String, default: T | Null = null): Argument[T] =
@@ -100,7 +103,7 @@ object options:
       val ordered = descriptors.sortBy(_.key)
 
       val lines = ordered.map: desc =>
-        s"${desc.hint} ${desc.parser.ct.runtimeClass.getSimpleName}"
+        s"${desc.hint} ${desc.parser.valueDescription}"
       val maxline = lines.map(_.size).maxOption.getOrElse(0)
       lines.lazyZip(ordered).map: (l, d) =>
         val res =
