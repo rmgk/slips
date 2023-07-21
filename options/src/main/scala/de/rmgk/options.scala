@@ -69,6 +69,8 @@ object options:
     Argument(name, name, "", None)(using ArgumentValueParser.subcommandParser(parser, description))
 
   case class ArgumentsParser[Res](descriptors: List[Argument[_]], handler: ArgumentContext => Res):
+    def formatHelp(): String =
+      ParseError.formatHelp(descriptors)
     def parse(parameters: List[String]): ParseResult[Res] =
       try
         val (result, remaining) = parseUnsafe(parameters)
@@ -133,8 +135,8 @@ object options:
           if d.description.nonEmpty
           then s"%-${maxline}s   %s".format(l, d.description)
           else l
-        if d.default == null
-        then res
+        if d.default == null || res.endsWith("\n")
+        then res.stripTrailing()
         else s"$res\n  (default: ${d.default})"
       .mkString("\n")
 
