@@ -1,6 +1,6 @@
 package de.rmgk
 
-import de.rmgk.resources.*
+import de.rmgk.resource.*
 
 class BasicSyntaxTest extends munit.FunSuite {
 

@@ -2,7 +2,7 @@ package de.rmgk
 
 import scala.quoted.*
 
-object resources {
+object resource {
 
   trait Resource {
     type Type

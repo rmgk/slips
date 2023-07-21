@@ -1,7 +1,7 @@
 package de.rmgk
 
 import de.rmgk.options.ParsedArguments.{ParseException, ParseResult}
-import de.rmgk.resources.{Resource, ResourceContext, collectResources}
+import de.rmgk.resource.{Resource, ResourceContext, collectResources}
 
 import java.nio.file.Path
 import scala.reflect.ClassTag
