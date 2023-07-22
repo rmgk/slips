@@ -15,7 +15,9 @@ object options:
   object ArgumentValueParser:
     def one[T](p: String => Option[T])(using ct: ClassTag[T]): ArgumentValueParser[T] = new:
       def apply(args: List[String]): (Option[T], List[String]) =
-        (p(args.head), args.tail)
+        args match
+          case Nil          => (None, Nil)
+          case head :: tail => (p(head), tail)
       def valueDescription: String = ct.runtimeClass.getSimpleName.nn
 
     given ArgumentValueParser[Path]   = one(s => Some(Path.of(s).nn))
@@ -26,11 +28,22 @@ object options:
     given ArgumentValueParser[Boolean] = new:
       def apply(str: List[String]): (Option[Boolean], List[String]) = (Some(true), str)
       def valueDescription                                          = ""
-    given [T: ClassTag](using p: ArgumentValueParser[T]): ArgumentValueParser[Option[T]] = new:
+    given [T](using p: ArgumentValueParser[T]): ArgumentValueParser[Option[T]] = new:
       def apply(args: List[String]): (Option[Option[T]], List[String]) =
         val (value, rest) = p.apply(args)
         (value.map(Some.apply), rest)
       def valueDescription = s"Option(${p.valueDescription})"
+    given [T](using avp: ArgumentValueParser[T]): ArgumentValueParser[List[T]] with
+      override def apply(args: List[String]): (Option[List[T]], List[String]) =
+        def rec(remaining: List[String], acc: List[T]): (Option[List[T]], List[String]) =
+          val (value, rest) = avp.apply(remaining)
+          value match
+            case None    => (Some(acc.reverse), remaining)
+            case Some(v) => rec(rest, v :: acc)
+
+        rec(args, Nil)
+
+      override def valueDescription: String = s"${avp.valueDescription}*"
 
     def subcommandParser[T](argumentsParser: ArgumentsParser[T], description: String): ArgumentValueParser[Option[T]] =
       new ArgumentValueParser[Option[T]] {
@@ -40,6 +53,7 @@ object options:
         override def valueDescription: String =
           s"– $description\n" + ParseError.formatHelp(argumentsParser.descriptors).indent(2)
       }
+
   end ArgumentValueParser
   def positional[T: ArgumentValueParser](hint: String, description: String, default: T | Null = null): Argument[T] =
     Argument("", s"<$hint>", description, default)
