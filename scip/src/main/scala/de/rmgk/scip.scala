@@ -28,7 +28,12 @@ object scip {
   ) {
 
     object ScipExInstance extends ScipEx {
-      override def getMessage: String = s"idx: ${debugat(index)}; fail: ${debugat(lastFail)}"
+      override def getMessage: String =
+        s"idx: ${debugat(index)}${
+          if lastFail > 0
+          then s"; fail: ${debugat(lastFail)}"
+          else ""
+        }"
     }
 
     def debugat(i: Int): String = s"${index}»${str(i, i + 12).replaceAll("\\n", "\\\\n")}«"
