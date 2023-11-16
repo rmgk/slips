@@ -1,4 +1,3 @@
-import Dependencies.*
 import Settings.*
 import Tools.publishSonatype
 
@@ -8,7 +7,7 @@ publish / skip := true
 val commonSettings = Def.settings(
   organization := "de.rmgk.slips",
   scalaVersion_3,
-  libraryDependencies ++= List(munit.value, munitCheck.value),
+  Dependencies.munit, Dependencies.munitCheck,
   explicitNulls(Compile),
   publishSonatype,
 )
@@ -17,7 +16,7 @@ val logging = crossProject(JSPlatform, JVMPlatform, NativePlatform)
   .crossType(CrossType.Pure)
   .settings(
     commonSettings,
-    libraryDependencies += sourcecode.value,
+    Dependencies.sourcecode,
     version    := "0.5.1-SNAPSHOT",
     isSnapshot := true
   )
