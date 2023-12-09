@@ -53,4 +53,4 @@ val scip = crossProject(JSPlatform, JVMPlatform, NativePlatform)
 
 val script = crossProject(JVMPlatform, NativePlatform)
   .crossType(CrossType.Pure)
-  .settings(commonSettings, version := "0.7.0", isSnapshot := false)
+  .settings(commonSettings, version := "0.8.0", isSnapshot := false)

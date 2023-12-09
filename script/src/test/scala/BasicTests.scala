@@ -1,4 +1,6 @@
-import de.rmgk.script.{ProcessResultException, syntax}
+import de.rmgk.script
+
+import de.rmgk.script.ProcessResultException
 
 import java.io.{ByteArrayOutputStream, IOException}
 import java.nio.file.{Files, Path}
@@ -12,11 +14,11 @@ class BasicTests extends munit.FunSuite {
 
   test("no splitting inner strings") {
     try
-      val res = process"${"ls -al"}".run()
+      val res = process"${"ls -al"}".run().!
       assert(false, "should throw an exception")
     catch
       case e: ProcessResultException => () // native results in some non zero exit code
-      case e: IOException => () // jvm throws an exception before execution, thats fine
+      case e: IOException            => () // jvm throws an exception before execution, that’s fine
   }
 
   test("sequence arguments") {

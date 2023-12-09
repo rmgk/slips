@@ -1,5 +1,10 @@
 = Changelog
 
+== v0.8.0
+
+• Script
+	• simplify/generalize helper methods
+	• remove conversions (Scala native seems to have needed JVM methods by now)
 
 == v0.7.0
 
