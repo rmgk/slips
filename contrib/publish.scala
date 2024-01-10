@@ -1,6 +1,6 @@
 #!/usr/bin/env -S scala-cli shebang
 
-//> using scala "3.3.0"
+//> using scala "3.3.2"
 //> using lib "de.rmgk.slips::script:0.5.0"
 
 import de.rmgk.script.syntax
