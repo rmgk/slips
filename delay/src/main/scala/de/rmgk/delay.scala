@@ -127,6 +127,11 @@ object delay {
           Sync(res.get)
         .bind
 
+    inline def defer[R, A](inline close: Unit): Async[Ctx, Unit] =
+      Async.fromCallback:
+        try Async.handler.succeed(())
+        finally close
+
     /** `.provide`, but you can put the context first. */
     inline def provided[Ctx, A](ctx: Ctx)(inline expr: Ctx ?=> A): Async[Any, A] =
       Async { expr }.provide(ctx)
