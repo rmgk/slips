@@ -220,4 +220,26 @@ class DelayTests extends munit.FunSuite {
     // this does NOT break, because the break exception is caught and propagated
     assertEquals(seen, List(14, 9, 8, 7, 6, 5, 4, 3, 2, 1))
 
+  test("resource and stream"):
+
+    val many = Async.fromCallback:
+      var x = 0
+      while
+        x += 1
+        x < 4
+      do
+        Async.handler.succeed(x)
+
+    var seen = List.empty[(Int, String)]
+
+    val res = Async:
+      var y = ""
+      val x = many.bind
+      Async.bind:
+        Async.resource({println("open"); y}, m => { println(s"close $m"); y = y + "x" }): r =>
+          println(s"updating $y, $r")
+          seen = ((x, r)) :: seen
+    res.runToAsync
+    assertEquals(seen, List((3, "xx"), (2, "x"), (1, "")))
+
 }

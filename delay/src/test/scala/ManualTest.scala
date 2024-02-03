@@ -23,8 +23,12 @@ def run() =
   println("runs first")
   res2.run(using global)(println)
 
-  println(printCode {
-    Async.resource(1, _ + 1) {
-      _ + 4
-    }
-  })
+
+  println(s"-----------------------------")
+
+  println(printCode:
+    Async:
+      val x = Sync(4).run
+      val y = Sync(5).bind
+      x + y
+  )
