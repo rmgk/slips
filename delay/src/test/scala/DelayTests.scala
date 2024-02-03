@@ -89,6 +89,32 @@ class DelayTests extends munit.FunSuite {
     assertEquals(messages, List(m4, m3, m1))
   }
 
+  test("close in scope") {
+    var messages: List[String] = Nil
+    val m1                     = s"starting something"
+    val m3                     = "resource closed"
+    val m4                     = "afterwards"
+    val m5                     = "finally"
+
+    Async[Unit] {
+      val irrelevant = Async("at least I hope so").bind
+      Async.resource(m3, me => messages ::= me) { msg =>
+        messages ::= m1
+      }.bind
+
+      val alsoIrrelevant = Async("at least I hope so 2").bind
+
+      messages ::= m5
+    }.run(using ()) {
+      case Failure(e) =>
+        assert(false, s"got exception, but was unexpected $e")
+        messages ::= m4
+      case _ => assert(true)
+    }
+
+    assertEquals(messages, List(m5, m3, m1))
+  }
+
   def makeFailing =
     var needed = 3
     val failsALot = Async[Any] {
@@ -236,7 +262,7 @@ class DelayTests extends munit.FunSuite {
       var y = ""
       val x = many.bind
       Async.bind:
-        Async.resource({println("open"); y}, m => { println(s"close $m"); y = y + "x" }): r =>
+        Async.resource({ println("open"); y }, m => { println(s"close $m"); y = y + "x" }): r =>
           println(s"updating $y, $r")
           seen = ((x, r)) :: seen
     res.runToAsync
