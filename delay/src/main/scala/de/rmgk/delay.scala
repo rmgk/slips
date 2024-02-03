@@ -45,7 +45,9 @@ import scala.util.{Failure, Success, Try}
   *
   * ```
   * Async {
+  *   // this runs on whatever thread runs the outer async
   *   async1.runToFuture.map(x => x + 1).toAsync.bind
+  *   // `toAsync` above take an execution context, and from this point onward, we are executing on one of those worker threads
   * }
   * ```
   */
@@ -115,7 +117,7 @@ object delay {
       ${ DelayMacros.asyncImpl[Ctx, A]('{ expr }) }
 
     /** Simple form of resource handling given an `open` and `close` function for some resource.
-      * Makes the resource available inside the async `body` and ensures it is closed as soon as `body` is done (exceptionally or normally).
+      * Makes the resource available inside the async `body` and closes it after any single flow (value or error) was produced by `body`.
       */
     inline def resource[R, A](inline open: R, inline close: R => Unit)(inline body: Ctx ?=> R => A): Async[Ctx, A] =
       Async[Ctx]:
@@ -127,6 +129,7 @@ object delay {
           Sync(res.get)
         .bind
 
+    /** Execute a side effect when the current flow is done */
     inline def defer[R, A](inline close: Unit): Async[Ctx, Unit] =
       Async.fromCallback:
         try Async.handler.succeed(())

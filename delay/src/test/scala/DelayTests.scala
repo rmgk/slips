@@ -136,6 +136,33 @@ class DelayTests extends munit.FunSuite {
     assertEquals(messages, List(m3, m5, m4, m1))
   }
 
+
+  test("defer with generator?") {
+    var messages: List[String] = Nil
+    val m1                     = s"starting something"
+    val m3                     = "resource closed"
+    val m4                     = "afterwards"
+    val m5                     = "finally"
+
+    Async[Unit] {
+      Async.fromCallback:
+        Async.handler.succeed(1)
+        Async.handler.succeed(2)
+      .bind
+
+      messages ::= m1
+
+      Async.defer(messages ::= m3).bind
+
+      val irrelevant = Async("at least I hope so 2").bind
+      Async(messages ::= m4).bind
+
+      messages ::= m5
+    }.run(using ()) { _ => }
+
+    assertEquals(messages, List(m3, m5, m4, m1, m3, m5, m4, m1))
+  }
+
   def makeFailing =
     var needed = 3
     val failsALot = Async[Any] {
