@@ -136,7 +136,6 @@ class DelayTests extends munit.FunSuite {
     assertEquals(messages, List(m3, m5, m4, m1))
   }
 
-
   test("defer with generator?") {
     var messages: List[String] = Nil
     val m1                     = s"starting something"
@@ -246,15 +245,15 @@ class DelayTests extends munit.FunSuite {
 
     val onetwo = Async.fromCallback:
       try
-        Async.handler.succeed(1)
-        Async.handler.succeed(2)
-        var x = 2
+        var x = 0
         while
           x += 1
           x < 10
         do
           Async.handler.succeed(x)
         Async.handler.succeed(14)
+      // This “works” because CancelControl is a ControlThrowable, which is not handled as normal by the error forwarding mechanism
+      // It seems like a terrible idea though.
       catch case CancelControl => println("done")
 
     var seen = List.empty[Int]
@@ -270,9 +269,7 @@ class DelayTests extends munit.FunSuite {
   test("generate with better aborts?"):
     val onetwo = Async.fromCallback:
       try
-        Async.handler.succeed(1)
-        Async.handler.succeed(2)
-        var x = 2
+        var x = 0
         while
           x += 1
           x < 10
@@ -316,4 +313,28 @@ class DelayTests extends munit.FunSuite {
     res.runToAsync
     assertEquals(seen, List((3, "xx"), (2, "x"), (1, "")))
 
+  /** It’s all about co-op-per-ray-tion */
+  test("generate with context cancel") {
+
+    class Ctrl(var cancel: Boolean)
+
+    val onetwo = Async.fromCallback:
+      var x = 0
+      while
+        x += 1
+        x < 10 && !summon[Ctrl].cancel
+      do
+        Async.handler.succeed(x)
+      Async.handler.succeed(14)
+
+    var seen = List.empty[Int]
+
+    val res = Async:
+      val x = onetwo.bind
+      seen ::= x
+      if x == 7 then summon[Ctrl].cancel = true
+    val ctrl = Ctrl(false)
+    res.runToAsync(using ctrl)
+    assertEquals(seen, List(14, 7, 6, 5, 4, 3, 2, 1))
+  }
 }
