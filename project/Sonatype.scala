@@ -7,7 +7,7 @@ object Tools {
   val publishSonatype = Def.settings(
     organization         := "de.rmgk.slips",
     organizationName     := "rmgk",
-    organizationHomepage := Some(url("https://github.com/rmgk/")),
+    organizationHomepage := None,
     homepage             := Some(url("https://github.com/rmgk/slips/")),
     licenses             := List("Apache 2" -> new URI("http://www.apache.org/licenses/LICENSE-2.0.txt").toURL),
     scmInfo := Some(
@@ -16,17 +16,10 @@ object Tools {
         "scm:git@github.com:rmgk/slips.git"
       )
     ),
-    developers := List(
-      Developer(
-        id = "ragnar",
-        name = "Ragnar Mogk",
-        email = "git@rmgk.de",
-        url = url("https://github.com/rmgk/")
-      )
-    ),
+    developers := List(),
 
     // no binary compatibility for 0.Y.z releases
-    versionScheme := Some("semver-spec"),
+    versionScheme := Some("strict"),
 
     // Remove all additional repository other than Maven Central from POM
     pomIncludeRepository := { _ => false },
