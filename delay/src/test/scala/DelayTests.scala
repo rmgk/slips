@@ -358,4 +358,28 @@ class DelayTests extends munit.FunSuite {
     res.runToAsync
     assertEquals(seen, List(14, 7, 6, 5, 4, 3, 2, 1))
   }
+
+
+  test("context contravariance") {
+
+    class Fruit
+    case class Apple() extends Fruit
+
+    var seen: List[Any] = Nil
+
+    val a = Async[Apple]:
+      seen ::= summon[Apple]
+    val b = Async[Fruit]:
+      seen ::= summon[Fruit]
+    val c = Async[Any]: ctx ?=>
+      seen ::= ctx
+
+    Async[Apple]:
+      a.bind
+      b.bind
+      c.bind
+    .run(using Apple())(_ => ())
+
+    assertEquals(seen, List(Apple(), Apple(), Apple()))
+  }
 }

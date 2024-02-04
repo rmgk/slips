@@ -155,7 +155,10 @@ object delay {
   /** Syntactic convenience to enable type inference of `Ctx`. */
   inline def Async[Ctx]: AsyncCompanion[Ctx] = new AsyncCompanion[Ctx] {}
 
-  /** Simple promise implementation synchronizing on the object monitor. */
+  /** Simple promise implementation synchronizing on the object monitor.
+    * Promises guarantee that listeners receives at most one flow, even if the input has multiple flows.
+    * There is no guarantee made, that all listeners receive the same flow.
+    */
   class Promise[T] extends Callback[T]:
     @volatile private var value: Option[Try[T]]        = None
     @volatile private var callbacks: List[Callback[T]] = Nil
@@ -168,10 +171,12 @@ object delay {
         cbs
       .foreach(_.complete(res))
 
-    private def handler(@unused a: Any)(cb: Callback[T]): Unit = synchronized:
-      value match
-        case None    => callbacks ::= cb
-        case Some(v) => cb.complete(v)
+    private def handler(@unused a: Any)(cb: Callback[T]): Unit =
+      synchronized:
+        value match
+          case None    => callbacks ::= cb; None
+          case Some(v) => Some(v)
+      .foreach(cb.complete)
 
     val async: Async[Any, T] = new Async(handler)
   end Promise
@@ -255,104 +260,155 @@ object delay {
   end syntax
 
   object DelayMacros:
+
+    /** Equivalent to `sync.runInContext(ctx)` but tries to cleanup the expression assuming there are multiple inlined calls present.
+      * Primarily enables beta reduction in case sync is just `new Sync(..)` (which happens a lot due to inlining)
+      */
     def applyInBlock[Ctx: Type, B: Type](
-        dio: Expr[Sync[Ctx, B]],
+        sync: Expr[Sync[Ctx, B]],
         ctx: Expr[Ctx]
     )(using quotes: Quotes): Expr[B] = {
       import quotes.reflect.*
-      val maybeBlock = cleanBlock(dio.asTerm)
+      val maybeBlock = flatBlock(sync.asTerm)
       val fixed = maybeBlock match {
         case Block(stmts, expr) => expr.asExpr match {
             case '{ new Sync[α, B]($scxfun) } =>
               if !(TypeRepr.of[Ctx] <:< TypeRepr.of[α]) then
                 report.errorAndAbort(s"»${Type.show[Ctx]}« is not a subtype of »${Type.show[α]}«", expr.asExpr)
               Some(
-                cleanBlock(Block(stmts, Expr.betaReduce('{ $scxfun.apply($ctx.asInstanceOf[α]) }).asTerm)).asExprOf[B]
+                flatBlock(Block(stmts, Expr.betaReduce('{ $scxfun.apply($ctx.asInstanceOf[α]) }).asTerm)).asExprOf[B]
               )
             case other => None
           }
         case other => None
       }
-      Expr.betaReduce(fixed.getOrElse('{ $dio.runInContext($ctx) }))
+      Expr.betaReduce(fixed.getOrElse('{ $sync.runInContext($ctx) }))
     }
 
+    /** Similar to `applyInBlock` but for `async.handleInCtx(ctx)(cb)`.
+      * However, it does not have much special handling to clean up sequential callbacks.
+      * In particular, a pattern like this is quite common:
+      * ```
+      *   def anonfunction(res: Try[_]) = try ... catch ... // (transform handler)
+      *   val callback: Callback = anonfunction
+      *   callback.complete(Success(...))
+      * ```
+      *
+      * To improve legibility of the generated code, it would be desirable to simplify and inline further, including removing the try catch in cases where there is an outer handler.
+      * I don’t think there would be much of a performance difference (because of anything that uses async being way less efficient anyway).
+      */
     def handleInBlock[Ctx: Type, B: Type](
-        dio: Expr[Async[Ctx, B]],
+        async: Expr[Async[Ctx, B]],
         ctx: Expr[Ctx],
         cb: Expr[Callback[B]]
     )(using quotes: Quotes): Expr[Unit] = {
       import quotes.reflect.*
-      val maybeBlock = cleanBlock(dio.asTerm)
+      val maybeBlock = flatBlock(async.asTerm)
       val fixed = maybeBlock match {
-        case Block(stmts, expr) => expr.asExpr match {
+        case Block(stmts, expr) =>
+          def betaReducedBlock(expr: Expr[_]) =
+            Some(flatBlock(Block(
+              stmts,
+              Expr.betaReduce(expr).asTerm
+            )).asExprOf[Unit])
+          expr.asExpr match {
             case '{ new Async[Ctx, B]($scxfun) } =>
-              Some(cleanBlock(Block(stmts, Expr.betaReduce('{ $scxfun.apply($ctx).apply($cb) }).asTerm)).asExprOf[Unit])
+              betaReducedBlock('{ $scxfun.apply($ctx).apply($cb) })
             case '{ new Sync[Ctx, B]($scxfun) } =>
-              Some(
-                cleanBlock(Block(
-                  stmts,
-                  Expr.betaReduce('{ $cb.succeed($scxfun($ctx)) }).asTerm
-                )).asExprOf[Unit]
-              )
+              betaReducedBlock('{ $cb.succeed($scxfun($ctx)) })
             case other => None
           }
         case other => None
       }
-      Expr.betaReduce(fixed.getOrElse('{ $dio.handleInCtx($ctx)($cb) }))
+      Expr.betaReduce(fixed.getOrElse('{ $async.handleInCtx($ctx)($cb) }))
     }
 
-    def cleanBlock[A](using quotes: Quotes)(expr: quotes.reflect.Term): quotes.reflect.Term = {
+    /** Throws away all sorts of details in the AST that behave equivalent to just a sequence of statements
+      * so the other transformations work on more types of ASTs.
+      * It’s not entirely clear to me if the Inlined, Typed, and NamedArg cases are safe.
+      * They seem to be optional annotations (likely to improve error handling or for some earlier stages)
+      * but this could be a source of incompatibility. Let’s just hope that this would cause compile time errors, not run time errors.
+      */
+    def flatBlock[A](using quotes: Quotes)(expr: quotes.reflect.Term): quotes.reflect.Term = {
       import quotes.reflect.*
       expr match
-        case Inlined(_, _, t)                                 => cleanBlock(t)
-        case Match(_, List(CaseDef(Wildcard(), None, inner))) => cleanBlock(inner)
-        case Block(statements, expr) => cleanBlock(expr) match
+        case Inlined(_, _, t)                                 => flatBlock(t)
+        case Match(_, List(CaseDef(Wildcard(), None, inner))) => flatBlock(inner)
+        case Block(statements, expr) => flatBlock(expr) match
             case Block(innerstmts, expr) => Block(statements ::: innerstmts, expr)
             case expr                    => Block(statements, expr)
-        case Typed(expr, tt)   => cleanBlock(expr)
-        case NamedArg(_, expr) => cleanBlock(expr)
+        case Typed(expr, tt)   => flatBlock(expr)
+        case NamedArg(_, expr) => flatBlock(expr)
         case other             => Block(Nil, other)
     }
 
-    object CleanBlock {
-      def unapply(using quotes: Quotes)(expr: quotes.reflect.Term): Some[quotes.reflect.Term] = {
-        Some(cleanBlock(expr))
+    object FlatBlock {
+      def unapply(using
+          quotes: Quotes
+      )(expr: quotes.reflect.Term): Option[(List[quotes.reflect.Statement], quotes.reflect.Term)] = {
+        flatBlock(expr) match
+          case quotes.reflect.Block(stmts, expr) => Some((stmts, expr))
+          case _                                 => None
       }
     }
 
     def asyncImpl[Ctx: Type, T: Type](expr: Expr[T])(using quotes: Quotes): Expr[Async[Ctx, T]] = {
       import quotes.reflect.*
 
-      def blockedIO(stmts: List[Statement], io: Term)(withBound: Term => Expr[Async[Ctx, T]]) =
-        io.tpe.asType match {
-          case '[Async[Ctx, α]] =>
-            '{
-              ${ (if stmts.isEmpty then io else Block(stmts, io)).asExprOf[Async[Ctx, α]] }.flatMap {
-                (v: α) => ${ withBound('v.asTerm) }
+      /** Executes `stmts`, then `io`, once `io` returns a value, it is bound and handed over to `withBound`.
+        * In other words, this essentially just does `{stmts; io}.flatMap(withBound)`,
+        * but works with the pieces directly to hopefully be a bit more reliable in this AST manipulation context
+        */
+      def blockAndThen(stmts: List[Statement], async: Term)(withBound: Term => Expr[Async[Ctx, T]]) =
+        async.tpe.asType match {
+          case '[Async[γ, α]] =>
+            if !(TypeRepr.of[Ctx] <:< TypeRepr.of[γ])
+            then
+              report.errorAndAbort(
+                s"Can only bind matching context, but »${Type.show[Ctx]}« is not a subtype of »${Type.show[γ]}« ",
+                async.asExpr
+              )
+            else
+              '{
+                ${ (if stmts.isEmpty then async else Block(stmts, async)).asExprOf[Async[γ, α]] }.flatMap {
+                  (v: α) => ${ withBound('{ v }.asTerm) }
+                }
               }
-            }
-          case '[Async[γ, α]] => report.errorAndAbort(
-              s"Can only bind matching context, but »${Type.show[γ]}« is not »${Type.show[Ctx]}«",
-              io.asExpr
+          case '[other] =>
+            report.errorAndAbort(
+              s"Expected Async[${Type.show[Ctx]}, ?], but got ${Type.show[other]}«",
+              async.asExpr
             )
         }
 
-      cleanBlock(expr.asTerm) match {
+      flatBlock(expr.asTerm) match {
         case block @ Block(statements: List[Statement], expr) =>
-          val Block(List(stmt), init) = ValDef.let(Symbol.spliceOwner, "async$macro$result", expr) { ref =>
-            '{ Sync[Ctx][T] { ${ ref.asExprOf[T] } } }.asTerm
-          }: @unchecked
+          // rewrite the last expression such that we can handle it like all other statements, and then just return it’s result value as a sync
+          val Block(List(stmt), init) =
+            ValDef.let(Symbol.spliceOwner, "async$macro$result", expr) { ref =>
+              '{ Sync[Ctx][T] { ${ ref.asExprOf[T] } } }.asTerm
+            }: @unchecked
+
+          // we take the sequence of statements in the async block,
+          // and rewrite it into a nested list of handlers
           (statements :+ stmt).foldRight[Term](init) { (s, acc) =>
             s match {
-              case vd @ ValDef(name, typeTree, Some(CleanBlock(Block(stmts, Select(io, "bind"))))) =>
-                blockedIO(stmts, io) { v =>
+              // handle val def that end with a bind, like:
+              // val x = {
+              //   println(s"test")
+              //   async.bind
+              // }
+              // Note that CleanBlock treats expressions as blocks with an empty list of statements
+              case vd @ ValDef(name, typeTree, Some(FlatBlock(stmts, Select(async, "bind")))) =>
+                blockAndThen(stmts, async) { v =>
                   Block(
                     List(ValDef.copy(vd)(name, typeTree, Some(v))),
                     acc
                   ).asExprOf[Async[Ctx, T]]
                 }.asTerm
-              case CleanBlock(Block(stmts, Select(io, "bind"))) =>
-                blockedIO(stmts, io) { _ => acc.asExprOf[Async[Ctx, T]] }.asTerm
+              // similar to the above, but for the case where the result of `.bind` is discarded
+              case FlatBlock(stmts, Select(async, "bind")) =>
+                blockAndThen(stmts, async) { _ => acc.asExprOf[Async[Ctx, T]] }.asTerm
               case _ =>
                 Block(List(s), acc)
             }
