@@ -44,7 +44,7 @@ val datalog = crossProject(JSPlatform, JVMPlatform, NativePlatform)
 
 val delay = crossProject(JSPlatform, JVMPlatform, NativePlatform)
   .crossType(CrossType.Pure)
-  .settings(commonSettings, version := "0.5.0", isSnapshot := false)
+  .settings(commonSettings, version := "0.5.0-SNAPSHOT", isSnapshot := false)
 
 val scip = crossProject(JSPlatform, JVMPlatform, NativePlatform)
   .crossType(CrossType.Pure)

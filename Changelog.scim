@@ -1,5 +1,10 @@
 = Changelog
 
+== v.next
+
+• Delay
+	• add defer as an alternative to resource
+
 == v0.8.0
 
 • Script
