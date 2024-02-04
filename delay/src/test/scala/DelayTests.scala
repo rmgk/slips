@@ -254,7 +254,7 @@ class DelayTests extends munit.FunSuite {
         Async.handler.succeed(14)
       // This “works” because CancelControl is a ControlThrowable, which is not handled as normal by the error forwarding mechanism
       // It seems like a terrible idea though.
-      catch case CancelControl => println("done")
+      catch case CancelControl => ()
 
     var seen = List.empty[Int]
 
@@ -276,7 +276,7 @@ class DelayTests extends munit.FunSuite {
         do
           Async.handler.succeed(x)
         Async.handler.succeed(14)
-      catch case CancelControl => println("done")
+      catch case CancelControl => ()
 
     var seen = List.empty[Int]
 
@@ -307,8 +307,7 @@ class DelayTests extends munit.FunSuite {
       var y = ""
       val x = many.bind
       Async.bind:
-        Async.resource({ println("open"); y }, m => { println(s"close $m"); y = y + "x" }): r =>
-          println(s"updating $y, $r")
+        Async.resource(y, m => { y = y + "x" }): r =>
           seen = ((x, r)) :: seen
     res.runToAsync
     assertEquals(seen, List((3, "xx"), (2, "x"), (1, "")))
@@ -335,6 +334,28 @@ class DelayTests extends munit.FunSuite {
       if x == 7 then summon[Ctrl].cancel = true
     val ctrl = Ctrl(false)
     res.runToAsync(using ctrl)
+    assertEquals(seen, List(14, 7, 6, 5, 4, 3, 2, 1))
+  }
+
+  /** Interrupts? This works on JS, wat? */
+  test("generate with thread cancel") {
+
+    val onetwo = Async.fromCallback:
+      var x = 0
+      while
+        x += 1
+        x < 10 && !Thread.interrupted()
+      do
+        Async.handler.succeed(x)
+      Async.handler.succeed(14)
+
+    var seen = List.empty[Int]
+
+    val res = Async:
+      val x = onetwo.bind
+      seen ::= x
+      if x == 7 then Thread.currentThread().nn.interrupt()
+    res.runToAsync
     assertEquals(seen, List(14, 7, 6, 5, 4, 3, 2, 1))
   }
 }
