@@ -269,20 +269,15 @@ object delay {
         ctx: Expr[Ctx]
     )(using quotes: Quotes): Expr[B] = {
       import quotes.reflect.*
-      val maybeBlock = flatBlock(sync.asTerm)
-      val fixed = maybeBlock match {
-        case Block(stmts, expr) => expr.asExpr match {
-            case '{ new Sync[α, B]($scxfun) } =>
-              if !(TypeRepr.of[Ctx] <:< TypeRepr.of[α]) then
-                report.errorAndAbort(s"»${Type.show[Ctx]}« is not a subtype of »${Type.show[α]}«", expr.asExpr)
-              Some(
-                flatBlock(Block(stmts, Expr.betaReduce('{ $scxfun.apply($ctx.asInstanceOf[α]) }).asTerm)).asExprOf[B]
-              )
-            case other => None
-          }
-        case other => None
-      }
-      Expr.betaReduce(fixed.getOrElse('{ $sync.runInContext($ctx) }))
+      transformLast(sync.asTerm) { term =>
+        term.asExpr match {
+          case '{ new Sync[α, B]($scxfun) } =>
+            if !(TypeRepr.of[Ctx] <:< TypeRepr.of[α]) then
+              report.errorAndAbort(s"»${Type.show[Ctx]}« is not a subtype of »${Type.show[α]}«", term.asExpr)
+            Expr.betaReduce('{ $scxfun.apply($ctx.asInstanceOf[α]) }).asTerm
+          case other: Expr[Sync[Ctx, B]]@unchecked => '{ $other.runInContext($ctx) }.asTerm
+        }
+      }.asExprOf[B]
     }
 
     /** Similar to `applyInBlock` but for `async.handleInCtx(ctx)(cb)`.
