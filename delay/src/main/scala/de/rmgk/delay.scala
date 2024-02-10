@@ -364,11 +364,11 @@ object delay {
     def asyncImpl[Ctx: Type, T: Type](expr: Expr[T])(using quotes: Quotes): Expr[Async[Ctx, T]] = {
       import quotes.reflect.*
 
-      /** Executes `stmts`, then `io`, once `io` returns a value, it is bound and handed over to `withBound`.
-        * In other words, this essentially just does `{stmts; io}.flatMap(withBound)`,
+      /** Executes `stmts`, then `async`, once `async` returns a value, it is bound and handed over to `withBound`.
+        * In other words, this essentially just does `{stmts; async}.flatMap(withBound)`,
         * but works with the pieces directly to hopefully be a bit more reliable in this AST manipulation context
         */
-      def blockAndThen(stmts: List[Statement], async: Term)(withBound: Term => Expr[Async[Ctx, T]]) =
+      def blockAndThen(stmts: List[Statement], async: Term)(withBound: Term => Expr[Async[Ctx, T]]): Expr[Async[_, T]] =
         async.tpe.asType match {
           case '[Async[γ, α]] =>
             if !(TypeRepr.of[Ctx] <:< TypeRepr.of[γ])
@@ -391,7 +391,7 @@ object delay {
         }
 
       flatBlock(expr.asTerm) match {
-        case block @ Block(statements: List[Statement], expr) =>
+        case Block(statements: List[Statement], expr) =>
           // rewrite the last expression such that we can handle it like all other statements, and then just return it’s result value as a sync
           val Block(List(stmt), init) =
             ValDef.let(Symbol.spliceOwner, "async$macro$result", expr) { ref =>
