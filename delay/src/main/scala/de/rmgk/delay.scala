@@ -5,7 +5,7 @@ import scala.annotation.{compileTimeOnly, unused}
 import scala.concurrent.{ExecutionContext, Future}
 import scala.quoted.{Expr, Quotes, Type}
 import scala.util.control.NonFatal
-import scala.util.{Failure, Success, Try}
+import scala.util.{Failure, Success, Try, boundary}
 
 /** Work with descriptions of computations that you want to execute later.
   * Delay offers two abstractions [[Sync]] and [[Async]].
@@ -107,14 +107,16 @@ object delay {
     /** Main async syntax. The body `expr` is not executed until the returned [[Async]] is started with [[delay.extensions.run]] or one of the variants. Any exceptions raised in `expr` are forwarded to the handler of the async run. */
     inline def apply[A](inline expr: Ctx ?=> A): Async[Ctx, A] =
       new Async[Ctx, A](ctx =>
-        cb =>
-          try syntax(expr(using ctx)).run(using ctx)(cb)
+        (cb: Callback[A]) =>
+          try
+            val async = syntax(expr(using ctx))
+            async.run(using ctx)(cb)
           catch case e if NonFatal(e) => cb.fail(e)
       )
 
     /** Enables the use of [[Async.bind]] inside a sequential looking block. */
     inline def syntax[A](inline expr: A): Async[Ctx, A] =
-      ${ DelayMacros.asyncImpl[Ctx, A]('{ expr }) }
+      ${ DelayMacros.newAsyncImpl[Ctx, A]('{ expr }) }
 
     /** Simple form of resource handling given an `open` and `close` function for some resource.
       * Makes the resource available inside the async `body` and closes it after any single flow (value or error) was produced by `body`.
@@ -259,7 +261,7 @@ object delay {
         () // cs.whenComplete returns kinda itself … it’s a bit weird, but I think it is safe to ignore
   end syntax
 
-  object DelayMacros:
+  object DelayMacros {
 
     /** Equivalent to `sync.runInContext(ctx)` but tries to cleanup the expression assuming there are multiple inlined calls present.
       * Primarily enables beta reduction in case sync is just `new Sync(..)` (which happens a lot due to inlining)
@@ -314,9 +316,10 @@ object delay {
 
     def transformLast[A](using
         quotes: Quotes
-    )(expr: quotes.reflect.Term)(transform: quotes.reflect.Term => quotes.reflect.Term): quotes.reflect.Term = {
+    )(expr: quotes.reflect.Statement)(transform: quotes.reflect.Statement => quotes.reflect.Term)
+        : quotes.reflect.Term = {
       import quotes.reflect.*
-      def rec(expr: Term): Term =
+      def rec(expr: Statement): Term =
         expr match
           case Inlined(a, b, t)                                 => Inlined(a, b, rec(t))
           case Match(_, List(CaseDef(Wildcard(), None, inner))) => rec(inner)
@@ -327,6 +330,21 @@ object delay {
           case Typed(expr, tt) => rec(expr)
           case other           => transform(other)
       rec(expr)
+    }
+
+    def transformLastOption[A](using quotes: Quotes)(
+        expr: quotes.reflect.Statement,
+        default: quotes.reflect.Term
+    )(
+        transform: PartialFunction[quotes.reflect.Statement, quotes.reflect.Term]
+    ): quotes.reflect.Term = {
+      boundary[quotes.reflect.Term]:
+        transformLast(expr) { arg =>
+          transform.lift(arg) match
+            case None    => boundary.break(default)
+            case Some(v) => v
+        }
+
     }
 
     /** Throws away all sorts of details in the AST that behave equivalent to just a sequence of statements
@@ -346,6 +364,89 @@ object delay {
         case Typed(expr, tt)   => flatBlock(expr)
         case NamedArg(_, expr) => flatBlock(expr)
         case other             => Block(Nil, other)
+    }
+
+    def newAsyncImpl[Ctx: Type, T: Type](expr: Expr[T])(using quotes: Quotes): Expr[Async[Ctx, T]] = {
+      import quotes.reflect.*
+
+      /** Executes `stmts`, then `async`, once `async` returns a value, it is bound and handed over to `withBound`.
+        * In other words, this essentially just does `{stmts; async}.flatMap(withBound)`,
+        * but works with the pieces directly to hopefully be a bit more reliable in this AST manipulation context
+        */
+      def blockAndThen(async: Term)(withBound: Term => Expr[Async[Ctx, T]]): Expr[Async[_, T]] =
+        async.tpe.asType match {
+          case '[Async[γ, α]] =>
+            if !(TypeRepr.of[Ctx] <:< TypeRepr.of[γ])
+            then
+              report.errorAndAbort(
+                s"Can only bind matching context, but »${Type.show[Ctx]}« is not a subtype of »${Type.show[γ]}« ",
+                async.asExpr
+              )
+            else
+              '{
+                ${ async.asExprOf[Async[γ, α]] }.flatMap {
+                  (v: α) => ${ withBound('{ v }.asTerm) }
+                }
+              }
+          case '[other] =>
+            report.errorAndAbort(
+              s"Expected Async[${Type.show[Ctx]}, ?], but got ${Type.show[other]}«",
+              async.asExpr
+            )
+        }
+
+      def rec(term: Term): Term = term match
+        case Inlined(_, _, t) => rec(t)
+        case Block(statements, expr) =>
+          val transformed = rec(expr)
+          report.warning(
+            s"--------------------term:\n${term.show}\n-------------------------before:\n${expr.show}\n-----------------------------after:\n${transformed.show}--------------",
+            term.asExpr
+          )
+
+          // we take the sequence of statements in the async block,
+          // and rewrite it into a nested list of handlers
+          statements.foldRight[Term](transformed): (s, acc) =>
+            report.warning(s"but not here?")
+            s match {
+              // handle val def that end with a bind, like:
+              // val x = {
+              //   println(s"test")
+              //   async.bind
+              // }
+              // Note that CleanBlock treats expressions as blocks with an empty list of statements
+              case vd @ ValDef(name, typeTree, Some(inner)) =>
+                transformLastOption(inner, Block(List(vd), acc)):
+                  case Select(async, "bind") =>
+                    blockAndThen(async) { v =>
+                      Block(
+                        List(ValDef.copy(vd)(name, typeTree, Some(v))),
+                        acc
+                      ).asExprOf[Async[Ctx, T]]
+                    }.asTerm
+              // similar to the above, but for the case where the result of `.bind` is discarded
+              case inner =>
+                report.warning(s"found inner", term.asExpr)
+                transformLastOption(inner, Block(List(inner), acc)):
+                  case Select(async, "bind") =>
+                    blockAndThen(async) { v =>
+                      acc.asExprOf[Async[Ctx, T]]
+                    }.asTerm
+            }
+        case other =>
+          other.asExpr match
+            case '{ $other: Async[γ, α] } =>
+              // report.warning(s"cannot handle in async:\n${term.show}", term.asExpr)
+              other.asTerm
+
+            case other =>
+              transformLastOption(other.asTerm, '{ Sync[Ctx][T] { ${ other.asExprOf[T] } } }.asTerm):
+                case Select(async, "bind") =>
+                  async
+        // report.warning(s"converting to sync:\n${term.show}", term.asExpr)
+
+      rec(expr.asTerm).asExprOf[Async[Ctx, T]]
+
     }
 
     object FlatBlock {
@@ -423,6 +524,6 @@ object delay {
           '{ Sync[Ctx][T]($expr) }
       }
     }
-  end DelayMacros
+  }
 
 }
