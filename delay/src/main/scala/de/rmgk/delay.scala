@@ -300,13 +300,15 @@ object delay {
       import quotes.reflect.*
       transformLast(async.asTerm) {
         term =>
-          term.asExpr match {
-            case '{ new Async[Ctx, B]($scxfun) } =>
-              Expr.betaReduce('{ $scxfun.apply($ctx).apply($cb) }).asTerm
-            case '{ new Sync[Ctx, B]($scxfun) } =>
-              Expr.betaReduce('{ $cb.succeed($scxfun($ctx)) }).asTerm
-            case other: Expr[Async[Ctx, B]] @unchecked => '{ $other.handleInCtx($ctx)($cb) }.asTerm
-          }
+          Expr.betaReduce:
+            term.asExpr match
+              case '{ new Async[Ctx, B]($scxfun) } =>
+                '{ $scxfun.apply($ctx).apply($cb) }
+              case '{ new Sync[Ctx, B]($scxfun) } =>
+                '{ $cb.succeed($scxfun($ctx)) }
+              case '{ $other: Async[Ctx, B] } =>
+                '{ $other.handleInCtx($ctx)($cb) }
+          .asTerm
       }.asExprOf[Unit]
     }
 
