@@ -359,7 +359,6 @@ class DelayTests extends munit.FunSuite {
     assertEquals(seen, List(14, 7, 6, 5, 4, 3, 2, 1))
   }
 
-
   test("context contravariance") {
 
     class Fruit
@@ -381,5 +380,30 @@ class DelayTests extends munit.FunSuite {
     .run(using Apple())(_ => ())
 
     assertEquals(seen, List(Apple(), Apple(), Apple()))
+  }
+
+  test("bind inside subblocks") {
+    val outer = Async[Any] { 100 }
+
+    def example =
+      Async {
+        val a = outer.bind
+        val x = 6
+        val z = {
+          // comment
+          val r = x + 1
+          val a = outer.bind
+          a + x + r
+        }
+        println(s"hi!")
+        val b = outer.bind
+        a + b + x + z
+      }
+    var res = 0
+    example.run:
+      case Success(v) => res = v
+      case other => assert(false, "no exceptions!")
+
+    assertEquals(res, 319)
   }
 }
