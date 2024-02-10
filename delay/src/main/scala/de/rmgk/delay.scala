@@ -123,7 +123,7 @@ object delay {
       */
     inline def resource[R, A](inline open: R, inline close: R => Unit)(inline body: Ctx ?=> R => A): Async[Ctx, A] =
       Async[Ctx]:
-        val r = open
+        val r: R = open
         Async[Ctx]:
           body(r)
         .transform: res =>
@@ -347,87 +347,147 @@ object delay {
 
     }
 
-    def newAsyncImpl[Ctx: Type, T: Type](expr: Expr[T])(using quotes: Quotes): Expr[Async[Ctx, T]] = {
+    def newAsyncImpl[Ctx: Type, T0: Type](expr: Expr[T0])(using quotes: Quotes): Expr[Async[Ctx, T0]] = {
       import quotes.reflect.*
 
-      /** Executes `stmts`, then `async`, once `async` returns a value, it is bound and handed over to `withBound`.
-        * In other words, this essentially just does `{stmts; async}.flatMap(withBound)`,
-        * but works with the pieces directly to hopefully be a bit more reliable in this AST manipulation context
-        */
-      def blockAndThen(async: Term)(withBound: Term => Expr[Async[Ctx, T]]): Expr[Async[_, T]] =
-        async.tpe.asType match {
-          case '[Async[γ, α]] =>
-            if !(TypeRepr.of[Ctx] <:< TypeRepr.of[γ])
-            then
+      case class RecRes[T](term: Expr[Async[Ctx, T]], binds: Boolean)
+
+      def handleSubBlockOfType[T: Type](expr: Expr[T]): RecRes[T] = {
+
+        /** Applies `withBound` to the result of `async` (once that produces values)
+          * In other words, this essentially just does `async.flatMap(withBound)`,
+          * but works with the pieces directly to hopefully be a bit more reliable in this AST manipulation context
+          */
+        def doBind[R: Type](async: Term)(withBound: Term => Expr[Async[Ctx, R]]): Expr[Async[_ <: Ctx, R]] =
+          async.tpe.asType match {
+            case '[Async[γ, α]] =>
+              if !(TypeRepr.of[Ctx] <:< TypeRepr.of[γ])
+              then
+                report.errorAndAbort(
+                  s"Can only bind matching context, but »${Type.show[Ctx]}« is not a subtype of »${Type.show[γ]}« ",
+                  async.asExpr
+                )
+              else
+                '{
+                  ${ async.asExprOf[Async[γ, α]] }.flatMap {
+                    (v: α) => ${ withBound('{ v }.asTerm) }
+                  }
+                }
+            case '[other] =>
               report.errorAndAbort(
-                s"Can only bind matching context, but »${Type.show[Ctx]}« is not a subtype of »${Type.show[γ]}« ",
+                s"Expected Async[${Type.show[Ctx]}, ?], but got ${Type.show[other]}«",
                 async.asExpr
               )
-            else
-              '{
-                ${ async.asExprOf[Async[γ, α]] }.flatMap {
-                  (v: α) => ${ withBound('{ v }.asTerm) }
-                }
-              }
-          case '[other] =>
-            report.errorAndAbort(
-              s"Expected Async[${Type.show[Ctx]}, ?], but got ${Type.show[other]}«",
-              async.asExpr
-            )
+          }
+
+        case class StateRes(binds: Boolean, statement: Statement)
+        def handleStatement(statement: Statement, continuation: Option[Expr[Async[Ctx, T]]]): StateRes = {
+          report.info(s"------------ handling statement\n${statement.show}\n")
+          statement match
+            // handle val def that end with a bind, like:
+            // val x = {
+            //   println(s"test")
+            //   async.bind
+            // }
+            // Note that CleanBlock treats expressions as blocks with an empty list of statements
+            case vd @ ValDef(name, typeTree, Some(inner)) =>
+              println(s"VAL DEF ${vd.show}")
+              inner.asExpr match
+                case '{ ($async: Async[Ctx, α]).bind } =>
+                  StateRes(
+                    true, {
+                      doBind(async.asTerm) { v =>
+                        Block(
+                          List(ValDef.copy(vd)(name, typeTree, Some(v))),
+                          continuation.get.asTerm
+                        ).asExprOf[Async[Ctx, T]]
+                      }.asTerm
+                    }
+                  )
+                case other =>
+                  typeTree.tpe.asType match
+                    case '[τ] =>
+                      val res = handleSubBlockOfType[τ](inner.asExprOf[τ])
+                      println(s"WSA BAD BUT BETTER: ${res.binds}\n(${inner.show})\n${res.term.show}\n-----------tt")
+                      if res.binds
+                      then
+                        val updated =
+                          ValDef.copy(vd)(name, typeTree, Some('{ ${ res.term.asExprOf[Async[Ctx, _]] }.bind }.asTerm))
+                        handleStatement(updated, continuation)
+                      else StateRes(false, statement)
+
+            case block @ Block(_, _) =>
+              val res = handleSubBlockOfType(block.asExpr)
+              if !res.binds then StateRes(false, block)
+              else handleStatement('{ ${ res.term.asExprOf[Async[Ctx, _]] }.bind }.asTerm, continuation)
+            case other: Term =>
+              other.asExpr match
+                case '{ ($other: Async[Ctx, α]).bind } =>
+                  StateRes(
+                    true,
+                    doBind(other.asTerm) { v =>
+                      continuation match
+                        case Some(value) => value
+                        case None        => '{ Sync[Ctx](${ v.asExprOf[T] }) }
+                    }.asTerm
+                  )
+                case otherExpr =>
+                  report.info(s"not an async: ${other.show}")
+                  StateRes(false, other)
+
+            case somethingElseEntirely =>
+              report.errorAndAbort(
+                s"cannot handle as async\n(${somethingElseEntirely.asInstanceOf[Term].tpe.show}) \n${somethingElseEntirely.show}"
+              )
+
         }
 
-      def rec(term: Term): Term = term match
-        case Inlined(_, _, t) => rec(t)
-        case Block(statements, expr) =>
-          val transformed = rec(expr)
-          report.warning(
-            s"--------------------term:\n${term.show}\n-------------------------before:\n${expr.show}\n-----------------------------after:\n${transformed.show}--------------",
-            term.asExpr
-          )
+        def handleTerminal(expr: Term): RecRes[T] = {
+          val handled: StateRes = handleStatement(expr, None)
+          val packedResult =
+            if handled.binds
+            then handled.statement.asExprOf[Async[Ctx, T]]
+            else
+              println(s"DOES NOT BIND\n${expr.show}")
+              report.info(s"fixing\n${expr.show}")
+              '{ Sync[Ctx](${ expr.asExprOf[T] }) }
+          RecRes(packedResult, handled.binds)
+        }
 
-          // we take the sequence of statements in the async block,
-          // and rewrite it into a nested list of handlers
-          statements.foldRight[Term](transformed): (s, acc) =>
-            report.warning(s"but not here?")
-            s match {
-              // handle val def that end with a bind, like:
-              // val x = {
-              //   println(s"test")
-              //   async.bind
-              // }
-              // Note that CleanBlock treats expressions as blocks with an empty list of statements
-              case vd @ ValDef(name, typeTree, Some(inner)) =>
-                transformLastOption(inner, Block(List(vd), acc)):
-                  case Select(async, "bind") =>
-                    blockAndThen(async) { v =>
-                      Block(
-                        List(ValDef.copy(vd)(name, typeTree, Some(v))),
-                        acc
-                      ).asExprOf[Async[Ctx, T]]
-                    }.asTerm
-              // similar to the above, but for the case where the result of `.bind` is discarded
-              case inner =>
-                report.warning(s"found inner", term.asExpr)
-                transformLastOption(inner, Block(List(inner), acc)):
-                  case Select(async, "bind") =>
-                    blockAndThen(async) { v =>
-                      acc.asExprOf[Async[Ctx, T]]
-                    }.asTerm
-            }
-        case other =>
-          other.asExpr match
-            case '{ $other: Async[γ, α] } =>
-              // report.warning(s"cannot handle in async:\n${term.show}", term.asExpr)
-              other.asTerm
+        def rec(term: Term): RecRes[T] =
+          println(s"+++++++++++++++++b doing recursion\n${term.show}\n")
+          term match
+            case Inlined(_, _, t) => rec(t)
+            case Block(statements, expr) =>
+              println(s"BLOCK ${term.show}")
+              val terminalRes = handleTerminal(expr)
+              terminalRes.term match
+                case '{ $transformed: Async[Ctx, T] } =>
+                  report.info(
+                    s"--------------------term:\n${term.show}\n-------------------------before:\n${expr.show}\n-----------------------------after:\n${transformed.show}\n--------------",
+                    term.asExpr
+                  )
 
-            case other =>
-              transformLastOption(other.asTerm, '{ Sync[Ctx][T] { ${ other.asExprOf[T] } } }.asTerm):
-                case Select(async, "bind") =>
-                  async
-        // report.warning(s"converting to sync:\n${term.show}", term.asExpr)
+                  // we take the sequence of statements in the async block,
+                  // and rewrite it into a nested list of handlers
+                  statements.foldRight[RecRes[T]](RecRes[T](transformed, false)):
+                    case (s, RecRes(acc, binds)) =>
+                      val res = handleStatement(s, Some(acc))
+                      if res.binds
+                      then RecRes(res.statement.asExprOf[Async[Ctx, T]], true)
+                      else RecRes(Block(List(s), acc.asTerm).asExprOf[Async[Ctx, T]], binds)
+                case other =>
+                  report.errorAndAbort(s"cannot handle\n${other.asTerm.tpe.show}\n${other.show}")
 
-      rec(expr.asTerm).asExprOf[Async[Ctx, T]]
+            case other: Term =>
+              println(s"TERMINAL ${other.show}")
+              handleTerminal(other)
 
+        rec(expr.asTerm)
+
+      }
+
+      handleSubBlockOfType[T0](expr).term
     }
 
   }
