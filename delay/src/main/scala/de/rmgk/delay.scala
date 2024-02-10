@@ -303,24 +303,33 @@ object delay {
         cb: Expr[Callback[B]]
     )(using quotes: Quotes): Expr[Unit] = {
       import quotes.reflect.*
-      val maybeBlock = flatBlock(async.asTerm)
-      val fixed = maybeBlock match {
-        case Block(stmts, expr) =>
-          def betaReducedBlock(expr: Expr[_]) =
-            Some(flatBlock(Block(
-              stmts,
-              Expr.betaReduce(expr).asTerm
-            )).asExprOf[Unit])
-          expr.asExpr match {
+      transformLast(async.asTerm) {
+        term =>
+          term.asExpr match {
             case '{ new Async[Ctx, B]($scxfun) } =>
-              betaReducedBlock('{ $scxfun.apply($ctx).apply($cb) })
+              Expr.betaReduce('{ $scxfun.apply($ctx).apply($cb) }).asTerm
             case '{ new Sync[Ctx, B]($scxfun) } =>
-              betaReducedBlock('{ $cb.succeed($scxfun($ctx)) })
-            case other => None
+              Expr.betaReduce('{ $cb.succeed($scxfun($ctx)) }).asTerm
+            case other: Expr[Async[Ctx, B]] @unchecked => '{ $other.handleInCtx($ctx)($cb) }.asTerm
           }
-        case other => None
-      }
-      Expr.betaReduce(fixed.getOrElse('{ $async.handleInCtx($ctx)($cb) }))
+      }.asExprOf[Unit]
+    }
+
+    def transformLast[A](using
+        quotes: Quotes
+    )(expr: quotes.reflect.Term)(transform: quotes.reflect.Term => quotes.reflect.Term): quotes.reflect.Term = {
+      import quotes.reflect.*
+      def rec(expr: Term): Term =
+        expr match
+          case Inlined(a, b, t)                                 => Inlined(a, b, rec(t))
+          case Match(_, List(CaseDef(Wildcard(), None, inner))) => rec(inner)
+          case Block(statements, expr) =>
+            Block(statements, rec(expr))
+          case NamedArg(a, expr) => NamedArg(a, rec(expr))
+          // throw away type annotations as we transform the terms to a different type so they become invalid
+          case Typed(expr, tt) => rec(expr)
+          case other           => transform(other)
+      rec(expr)
     }
 
     /** Throws away all sorts of details in the AST that behave equivalent to just a sequence of statements
