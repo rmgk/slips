@@ -13,27 +13,33 @@ object scip {
 
   trait ScipEx extends ControlThrowable
 
-  extension (inline s: String)
-    private inline def getU8Bytes: Array[Byte] =
-      import scala.language.unsafeNulls
-      s.getBytes(StandardCharsets.UTF_8)
-
   case class Scx(
+      /** Every operator that works on strings assumes this to be utf-8 */
       val input: Array[Byte],
       var index: Int,
+
+      /** Marks the end of the input range to be consider. Usually equal to `input.length` */
       val maxpos: Int,
-      var depth: Int,
-      var lastFail: Int,
+
+      /** enable output for the `trace` combinator */
       val tracing: Boolean,
+
+      /** tracks nesting level for tracing */
+      var depth: Int,
+      /** Used for the exception below.
+        * Note, once set, this is never reset (even if the failure is backtracked and handled), so this is not an indication of a parse failure.
+        */
+      var lastFail: Int,
   ) {
 
+    /** Used for allocation free signalling of parse errors. */
     object ScipExInstance extends ScipEx {
       override def getMessage: String =
         s"idx: ${debugat(index)}${
-          if lastFail > 0
-          then s"; fail: ${debugat(lastFail)}"
-          else ""
-        }"
+            if lastFail > 0
+            then s"; fail: ${debugat(lastFail)}"
+            else ""
+          }"
     }
 
     def debugat(i: Int): String = s"${index}»${str(i, i + 12).replaceAll("\\n", "\\\\n")}«"
@@ -42,8 +48,9 @@ object scip {
 
     def contains(bytes: Array[Byte]): Boolean =
       val len                           = bytes.length
-      @tailrec def rec(i: Int): Boolean = i >= len || bytes(i) == input(index + i) && rec(i + 1)
+      @tailrec def rec(i: Int): Boolean = i >= len && index + i <= maxpos || bytes(i) == input(index + i) && rec(i + 1)
       available(len) && rec(0)
+      // Not available in Scala native (and also kinda longer, wtf)
       // java.util.Arrays.equals(bytes, 0, bytes.length, input, index, math.min(index + bytes.length, maxpos))
 
     def available(min: Int): Boolean    = maxpos >= index + min
@@ -53,13 +60,13 @@ object scip {
       val bs = this.peek
       val b  = bs & 0xff
       if (b & Utf8bits.maxBit) == 0 then if p(b) then 1 else 0
-      else Utf8bits.utf8Pred(p, bs, b)
+      else Utf8bits.utf8Pred(p, b)
     }
 
     object Utf8bits {
 
-      def utf8Pred(p: Int => Boolean, bs: Byte, b: Int) = {
-        val count = Integer.numberOfLeadingZeros(~bs) - 24
+      def utf8Pred(p: Int => Boolean, b: Int) = {
+        val count = Integer.numberOfLeadingZeros(~(b << 24))
         val v = (count: @switch) match
           case 2 => parse2(b)
           case 3 => parse3(b)
@@ -81,7 +88,7 @@ object scip {
       inline def lowest(inline b: Int, inline n: Int): Int = b & ((1 << n) - 1)
       inline def addLowest(b: Int, acc: Int, n: Int): Int  = lowest(b, n) | (acc << n)
       inline def grab(acc: Int, inline pos: Int, inline max: Int): Int =
-        inline if (pos >= max) then acc
+        inline if pos >= max then acc
         else grab(addLowest(input(index + pos) & 0xff, acc, 6), pos + 1, max)
     }
   }
@@ -107,7 +114,7 @@ object scip {
   object Scx {
     def apply(s: String): Scx =
       val b = s.getU8Bytes
-      Scx(b, index = 0, maxpos = b.length, depth = 0, lastFail = -1, tracing = true)
+      new Scx(b, index = 0, maxpos = b.length, depth = 0, lastFail = -1, tracing = true)
   }
 
   /** Ground rules:
@@ -307,6 +314,11 @@ object scip {
       b.exists(_ == cur)
     }
   }
+
+  extension (inline s: String)
+    private inline def getU8Bytes: Array[Byte] =
+      import scala.language.unsafeNulls
+      s.getBytes(StandardCharsets.UTF_8)
 
   object MacroImpls {
     def stringMatchImpl(s: Expr[String])(using quotes: Quotes): Expr[Scip[Boolean]] =
