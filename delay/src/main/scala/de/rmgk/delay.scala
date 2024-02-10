@@ -270,13 +270,13 @@ object delay {
     )(using quotes: Quotes): Expr[B] = {
       import quotes.reflect.*
       transformLast(sync.asTerm) { term =>
-        term.asExpr match {
-          case '{ new Sync[α, B]($scxfun) } =>
-            if !(TypeRepr.of[Ctx] <:< TypeRepr.of[α]) then
-              report.errorAndAbort(s"»${Type.show[Ctx]}« is not a subtype of »${Type.show[α]}«", term.asExpr)
-            Expr.betaReduce('{ $scxfun.apply($ctx.asInstanceOf[α]) }).asTerm
-          case other: Expr[Sync[Ctx, B]]@unchecked => '{ $other.runInContext($ctx) }.asTerm
-        }
+        Expr.betaReduce:
+          term.asExpr match
+            case '{ new Sync[Ctx, B]($scxfun) } =>
+              '{ $scxfun.apply($ctx) }
+            case '{ $other: Sync[Ctx, B] } =>
+              '{ $other.runInContext($ctx) }
+        .asTerm
       }.asExprOf[B]
     }
 
