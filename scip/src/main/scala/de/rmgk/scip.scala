@@ -250,7 +250,8 @@ object scip {
       while scip.run do matches += 1
       matches
     }
-    inline def opt: Scip[true]                                = Scip { scip.run; true }
+    inline def opt: Scip[true] = Scip { scip.run; true }
+
     inline infix def or(inline other: Scip[Boolean]): Scip[Boolean] = Scip { scip.run || other.run }
     inline infix def and(inline other: Scip[Boolean]): Scip[Boolean] = Scip {
       val startAnd = scx.index
