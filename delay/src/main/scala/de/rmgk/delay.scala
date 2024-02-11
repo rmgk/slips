@@ -433,29 +433,34 @@ object delay {
         }
 
         def handleTerminal(expr: Term): RecRes[T] = {
+          // println(s"HANDLING TERMINAL\n${expr}")
           val handled: StateRes = handleStatement(expr, None)
           val packedResult =
             if handled.binds
             then handled.statement.asExprOf[Async[Ctx, T]]
             else
-              // println(s"DOES NOT BIND\n${expr.show}")
+              // println(s"DOES NOT BIND\n${expr}")
               // report.info(s"fixing\n${expr.show}")
               '{ Sync[Ctx](${ expr.asExprOf[T] }) }
           RecRes(packedResult, handled.binds)
         }
 
         def rec(term: Term): RecRes[T] =
-          // println(s"+++++++++++++++++b doing recursion\n${term.show}\n")
+          // println(s"+++++++++++++++++ doing recursion\n${term.show}\n")
           term match
-            case Inlined(_, _, t) => rec(t)
+            case Inlined(a, b, t) =>
+              val res = rec(t)
+              RecRes(Inlined(a, b, res.term.asTerm).asExprOf[Async[Ctx, T]], res.binds)
+            // not strictly necessary, but a reasonable simplification
+            case Block(Nil, e) => rec(e)
             case Block(statements, expr) =>
-              // println(s"BLOCK ${term.show}")
-              val terminalRes = handleTerminal(expr)
+              //println(s"BLOCK\n${statements}\n{$expr}")
+              val terminalRes = rec(expr)
               terminalRes.term match
                 case '{ $transformed: Async[Ctx, T] } =>
                   // we take the sequence of statements in the async block,
                   // and rewrite it into a nested list of handlers
-                  statements.foldRight[RecRes[T]](RecRes[T](transformed, false)):
+                  statements.foldRight[RecRes[T]](RecRes[T](transformed, terminalRes.binds)):
                     case (s, RecRes(acc, binds)) =>
                       val res = handleStatement(s, Some(acc))
                       if res.binds
@@ -465,7 +470,7 @@ object delay {
                   report.errorAndAbort(s"cannot handle\n${other.asTerm.tpe.show}\n${other.show}")
 
             case other: Term =>
-              // println(s"TERMINAL ${other.show}")
+              //println(s"TERMINAL ${other.show}")
               handleTerminal(other)
 
         rec(expr.asTerm)
