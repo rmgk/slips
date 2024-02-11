@@ -1,14 +1,14 @@
 import Settings.*
 import Tools.publishSonatype
 
-scalaVersion_3 // define explicit root version, otherwise cross building force defaults a 2.12 build on everything
+scala3defaults // define explicit root version, otherwise cross building force defaults a 2.12 build on everything
 publish / skip := true
 
 val commonSettings = Def.settings(
   organization := "de.rmgk.slips",
-  scalaVersion_3,
+  scala3defaults,
   Dependencies.munit, Dependencies.munitCheck,
-  explicitNulls(Compile),
+  explicitNulls(Compile / compile),
   publishSonatype,
 )
 

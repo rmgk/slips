@@ -21,4 +21,4 @@ addSbtPlugin("com.github.sbt" % "sbt-pgp" % "2.2.1")
 
 // tooling
 addSbtPlugin("pl.project13.scala"          % "sbt-jmh"       % "0.4.7")
-addSbtPlugin("org.scalablytyped.converter" % "sbt-converter" % "1.0.0-beta43")
+addSbtPlugin("org.scalablytyped.converter" % "sbt-converter" % "1.0.0-beta44")
