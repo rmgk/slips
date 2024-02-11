@@ -257,7 +257,6 @@ object scip {
       val startAnd = scx.index
       scip.run && { other.run || { scx.index = startAnd; false } }
     }
-
     inline infix def ifso[B](inline other: Scip[B]): Scip[B] = Scip {
       if scip.run then other.run
       else scx.fail
