@@ -442,7 +442,7 @@ class DelayTests extends munit.FunSuite {
 
     object ClosedControlException extends Exception("suppressed", null, false, false)
 
-    val sources = List("long", "strings")
+    val sources = List("long", "strings", "maybe", "should", "add", "some", "more?")
 
     val producer = Async[ExecutionContext] {
       val resource = Async(new ExampleResource()).bind
@@ -451,7 +451,7 @@ class DelayTests extends munit.FunSuite {
 
       val products = Async.fromCallback[String] {
         sources.foreach { item =>
-          println(s"producing $item")
+          //println(s"producing $item")
           Future:
             // can only do operation (`reverse`) while resource is available
             if resource.isOpen
@@ -461,10 +461,10 @@ class DelayTests extends munit.FunSuite {
         }
       }.transform { prod =>
         Async.fromCallback {
-          println(s"job done ${jobs.get()}")
+          //println(s"job done ${jobs.get()}")
           if jobs.decrementAndGet() == 0
           then
-            println(s"closing")
+            //println(s"closing")
             resource.close()
             Async.handler.complete(prod)
             Async.handler.fail(ClosedControlException)
@@ -479,7 +479,7 @@ class DelayTests extends munit.FunSuite {
     val collector = Async[ExecutionContext].fromCallback {
       @volatile var collected: List[String] = Nil
 
-      val product = producer.run:
+      producer.run:
         case Success(v)                      => synchronized { collected = v :: collected }
         case Failure(ClosedControlException) => Async.handler.succeed(collected)
         case Failure(other)                  => Async.handler.fail(other)
