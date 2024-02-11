@@ -251,13 +251,13 @@ object scip {
       matches
     }
     inline def opt: Scip[true]                                = Scip { scip.run; true }
-    inline def or(inline other: Scip[Boolean]): Scip[Boolean] = Scip { scip.run || other.run }
-    inline def and(inline other: Scip[Boolean]): Scip[Boolean] = Scip {
+    inline infix def or(inline other: Scip[Boolean]): Scip[Boolean] = Scip { scip.run || other.run }
+    inline infix def and(inline other: Scip[Boolean]): Scip[Boolean] = Scip {
       val startAnd = scx.index
       scip.run && { other.run || { scx.index = startAnd; false } }
     }
 
-    inline def ifso[B](inline other: Scip[B]): Scip[B] = Scip {
+    inline infix def ifso[B](inline other: Scip[B]): Scip[B] = Scip {
       if scip.run then other.run
       else scx.fail
     }

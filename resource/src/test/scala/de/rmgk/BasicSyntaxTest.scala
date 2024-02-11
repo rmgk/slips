@@ -6,11 +6,11 @@ class BasicSyntaxTest extends munit.FunSuite:
 
   class Box[T](val v: T) extends Resource { type Type = T }
 
-  object BoxAccess extends ResourceContext[Box[_]] {
-    override def accessResource(res: Box[_]): res.Type = res.v
+  object BoxAccess extends ResourceContext[Box[?]] {
+    override def accessResource(res: Box[?]): res.Type = res.v
   }
 
-  inline def collect[Res](inline expr: Res): (List[Box[_]], BoxAccess.type => Res) = collectResources(expr)
+  inline def collect[Res](inline expr: Res): (List[Box[?]], BoxAccess.type => Res) = collectResources(expr)
 
   test("basic syntax"):
     val a = Box(2)

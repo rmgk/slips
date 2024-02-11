@@ -60,12 +60,12 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
     ((space and "\"".all).orFail ~> (strChars or escape).rep.min(0).str <~ "\"".all.orFail).map(Js.Str.apply)
 
   inline def array =
-    ("[".all.orFail ~> jsonExpr.list(sep = ",".all) <~ (space and "]".all).orFail).map(Js.Arr(_: _*))
+    ("[".all.orFail ~> jsonExpr.list(sep = ",".all) <~ (space and "]".all).orFail).map(Js.Arr(_*))
 
   inline def pair = (string.map(_.value).trace("key") <~> (":".all.orFail ~> jsonExpr)).trace("pair")
 
   inline def obj: Scip[Js.Obj] =
-    ("{".all.orFail ~> pair.list(",".all) <~ (space and "}".all).orFail).map(Js.Obj(_: _*))
+    ("{".all.orFail ~> pair.list(",".all) <~ (space and "}".all).orFail).map(Js.Obj(_*))
 
   // to break recursive inlining :-)
   def jsonExpr: Scip[Js.Val] = iJsonExpr
