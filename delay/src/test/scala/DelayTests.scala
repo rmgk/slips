@@ -1,8 +1,9 @@
 import de.rmgk.delay.*
 
-import scala.concurrent.{Await, Future}
+import scala.concurrent.ExecutionContext.global
+import scala.concurrent.{Await, ExecutionContext, Future}
 import scala.concurrent.duration.Duration
-import scala.util.{Failure, Success}
+import scala.util.{Failure, Random, Success}
 import scala.util.control.ControlThrowable
 
 class DelayTests extends munit.FunSuite {
@@ -395,15 +396,36 @@ class DelayTests extends munit.FunSuite {
           val a = outer.bind
           a + x + r
         }
-        println(s"hi!")
         val b = outer.bind
         a + b + x + z
       }
     var res = 0
     example.run:
       case Success(v) => res = v
-      case other => assert(false, "no exceptions!")
+      case other      => assert(false, "no exceptions!")
 
     assertEquals(res, 319)
+  }
+
+  test("extraced future example") {
+
+    var messages: List[String] = Nil
+
+    def res2: Async[ExecutionContext, Double] = Async {
+      val a = Future {
+        messages ::= (s"running future")
+        Random.nextInt()
+      }.toAsync.bind
+      def of = Future { messages ::= (s"in another future, a was $a") }
+      Sync { messages ::= ("just for show") }.run
+      of.toAsync.bind
+      val b = Sync { messages ::= ("runs later"); math.pow(2, 10) }.run
+      Future { a % b }.toAsync.bind
+    }
+
+    messages ::= "runs first"
+    res2.runToFuture(using global).map(res =>
+      assertEquals(messages, List("runs later", messages(1), "just for show", "running future", "runs first"))
+    )(using global)
   }
 }
