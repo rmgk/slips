@@ -10,7 +10,7 @@ import scala.util.{Failure, Success, Try, boundary}
 /** Work with descriptions of computations that you want to execute later.
   * Delay offers two abstractions [[Sync]] and [[Async]].
   *
-  * [[Sync]] which behaves like a function `() => A` its only purpose is to enable much more efficient composition by using macros to transform any [[delay.extensions.map]] and [[delay.extensions.flatMap]] calls into just sequential code if everything is inlined, while falling back to passing around function pointers if you pass the [[Sync]] as parameters.
+  * [[Sync]] which behaves like a function `() => A` its only purpose is to enable much more efficient composition by using macros to transform any [[delay.syntax.map]] and [[delay.syntax.flatMap]] calls into just sequential code if everything is inlined, while falling back to passing around function pointers if you pass the [[Sync]] as parameters.
   * [[Sync]] is particularly useful for composition of code with side effects.
   *
   * [[Async]] similarly allows composition of asynchronous computations.
@@ -39,7 +39,7 @@ import scala.util.{Failure, Success, Try, boundary}
   * ```
   * Thus just a bit more regular than for expressions. Note that you may not use bind in any nested expressions, only as the outer method in a single statement, or as the right hand side of a val binding.
   *
-  * Note that [[Sync]] and in particular [[Async]] are just abstractions, there is no additional runtime or internal state beyond composition of functions. In particular, [[Async]] has no concept of parallel execution or threads or anything like that. Using [[delay.extensions.run]] (and thus at some point [[Async.bind]]) simply executes whatever  code you have written in the async handlers and likely the initial [[AsyncCompanion.fromCallback]].
+  * Note that [[Sync]] and in particular [[Async]] are just abstractions, there is no additional runtime or internal state beyond composition of functions. In particular, [[Async]] has no concept of parallel execution or threads or anything like that. Using [[delay.syntax.run]] (and thus at some point [[Async.bind]]) simply executes whatever  code you have written in the async handlers and likely the initial [[AsyncCompanion.fromCallback]].
   *
   * If you need to execute anything on a different thread you can easily do so by using whatever library for threading you fancy. We provide convenience functions to convert to and from [[scala.concurrent.Future]]:
   *
@@ -104,7 +104,7 @@ object delay {
     /** Use inside a [[fromCallback]] */
     inline def handler[A](using cb: Callback[A]): Callback[A] = cb
 
-    /** Main async syntax. The body `expr` is not executed until the returned [[Async]] is started with [[delay.extensions.run]] or one of the variants. Any exceptions raised in `expr` are forwarded to the handler of the async run. */
+    /** Main async syntax. The body `expr` is not executed until the returned [[Async]] is started with [[delay.syntax.run]] or one of the variants. Any exceptions raised in `expr` are forwarded to the handler of the async run. */
     inline def apply[A](inline expr: Ctx ?=> A): Async[Ctx, A] =
       new Async[Ctx, A](ctx =>
         (cb: Callback[A]) =>
@@ -116,7 +116,7 @@ object delay {
 
     /** Enables the use of [[Async.bind]] inside a sequential looking block. */
     inline def syntax[A](inline expr: A): Async[Ctx, A] =
-      ${ DelayMacros.newAsyncImpl[Ctx, A]('{ expr }) }
+      ${ DelayMacros.asyncImpl[Ctx, A]('{ expr }) }
 
     /** Simple form of resource handling given an `open` and `close` function for some resource.
       * Makes the resource available inside the async `body` and closes it after any single flow (value or error) was produced by `body`.
@@ -314,12 +314,12 @@ object delay {
       }.asExprOf[Unit]
     }
 
+    /** Transforms the “last” term in a larger expression for use with the above macros. */
     def transformLast[A](using
         quotes: Quotes
-    )(expr: quotes.reflect.Statement)(transform: quotes.reflect.Statement => quotes.reflect.Term)
-        : quotes.reflect.Term = {
+    )(expr: quotes.reflect.Term)(transform: quotes.reflect.Term => quotes.reflect.Term): quotes.reflect.Term = {
       import quotes.reflect.*
-      def rec(expr: Statement): Term =
+      def rec(expr: Term): Term =
         expr match
           case Inlined(a, b, t)                                 => Inlined(a, b, rec(t))
           case Match(_, List(CaseDef(Wildcard(), None, inner))) => rec(inner)
@@ -332,22 +332,11 @@ object delay {
       rec(expr)
     }
 
-    def transformLastOption[A](using quotes: Quotes)(
-        expr: quotes.reflect.Statement,
-        default: quotes.reflect.Term
-    )(
-        transform: PartialFunction[quotes.reflect.Statement, quotes.reflect.Term]
-    ): quotes.reflect.Term = {
-      boundary[quotes.reflect.Term]:
-        transformLast(expr) { arg =>
-          transform.lift(arg) match
-            case None    => boundary.break(default)
-            case Some(v) => v
-        }
-
-    }
-
-    def newAsyncImpl[Ctx: Type, T0: Type](expr: Expr[T0])(using quotes: Quotes): Expr[Async[Ctx, T0]] = {
+    /** This rather large macro transforms (nested) Async blocks with bind calls into callback-passing-style.
+      * The basic strategy is to fold over blocks from bottom to top to build larger chunks of the next callback to call, and call that whenever a `.bind` is found.
+      * Nested blocks are more or less handled by just recursing into them, which may return an async that is then automatically bound. If a nested block did actually contain a `.bind` is tracked by the `binds` return values.
+      */
+    def asyncImpl[Ctx: Type, T0: Type](expr: Expr[T0])(using quotes: Quotes): Expr[Async[Ctx, T0]] = {
       import quotes.reflect.*
 
       case class RecRes[T](term: Expr[Async[Ctx, T]], binds: Boolean)
@@ -391,7 +380,7 @@ object delay {
             // }
             // Note that CleanBlock treats expressions as blocks with an empty list of statements
             case vd @ ValDef(name, typeTree, Some(inner)) =>
-              println(s"VAL DEF ${vd.show}")
+              // println(s"VAL DEF ${vd.show}")
               inner.asExpr match
                 case '{ ($async: Async[Ctx, α]).bind } =>
                   StateRes(
@@ -408,7 +397,7 @@ object delay {
                   typeTree.tpe.asType match
                     case '[τ] =>
                       val res = handleSubBlockOfType[τ](inner.asExprOf[τ])
-                      println(s"WSA BAD BUT BETTER: ${res.binds}\n(${inner.show})\n${res.term.show}\n-----------tt")
+                      // println(s"FIXUP SUB BLOCK: ${res.binds}\n(${inner.show})\n${res.term.show}\n-----------tt")
                       if res.binds
                       then
                         val updated =
@@ -432,7 +421,7 @@ object delay {
                     }.asTerm
                   )
                 case otherExpr =>
-                  report.info(s"not an async: ${other.show}")
+                  // report.info(s"not an async: ${other.show}")
                   StateRes(false, other)
 
             case somethingElseEntirely =>
@@ -448,26 +437,21 @@ object delay {
             if handled.binds
             then handled.statement.asExprOf[Async[Ctx, T]]
             else
-              println(s"DOES NOT BIND\n${expr.show}")
-              report.info(s"fixing\n${expr.show}")
+              // println(s"DOES NOT BIND\n${expr.show}")
+              // report.info(s"fixing\n${expr.show}")
               '{ Sync[Ctx](${ expr.asExprOf[T] }) }
           RecRes(packedResult, handled.binds)
         }
 
         def rec(term: Term): RecRes[T] =
-          println(s"+++++++++++++++++b doing recursion\n${term.show}\n")
+          // println(s"+++++++++++++++++b doing recursion\n${term.show}\n")
           term match
             case Inlined(_, _, t) => rec(t)
             case Block(statements, expr) =>
-              println(s"BLOCK ${term.show}")
+              // println(s"BLOCK ${term.show}")
               val terminalRes = handleTerminal(expr)
               terminalRes.term match
                 case '{ $transformed: Async[Ctx, T] } =>
-                  report.info(
-                    s"--------------------term:\n${term.show}\n-------------------------before:\n${expr.show}\n-----------------------------after:\n${transformed.show}\n--------------",
-                    term.asExpr
-                  )
-
                   // we take the sequence of statements in the async block,
                   // and rewrite it into a nested list of handlers
                   statements.foldRight[RecRes[T]](RecRes[T](transformed, false)):
@@ -480,7 +464,7 @@ object delay {
                   report.errorAndAbort(s"cannot handle\n${other.asTerm.tpe.show}\n${other.show}")
 
             case other: Term =>
-              println(s"TERMINAL ${other.show}")
+              // println(s"TERMINAL ${other.show}")
               handleTerminal(other)
 
         rec(expr.asTerm)
