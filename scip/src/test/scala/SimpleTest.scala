@@ -157,6 +157,15 @@ class SimpleTest extends munit.FunSuite {
     assertEquals(res, false)
   }
 
+  test("augment bytes") {
+
+    val s = "123aβcABC"
+    val p = "123".all.orFail ~> "aβc".all.str.augment(_.byteCount).augment(_.region)
+
+    val res = p.runInContext(Scx(s))
+    assertEquals(res, (("aβc", 4), (3, 7)))
+  }
+
 }
 
 case class ScitzenDate(year: String, month: String, day: String) {
