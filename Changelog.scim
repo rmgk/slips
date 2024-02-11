@@ -4,6 +4,8 @@
 
 • Delay
 	• add defer as an alternative to resource
+	• refactor apply macros to be more straightforward and drop less information
+	• rewrite async macro to handle nested blocks (containing binds)
 
 == v0.8.0
 
