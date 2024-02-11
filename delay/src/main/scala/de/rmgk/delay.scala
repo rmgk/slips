@@ -353,7 +353,7 @@ object delay {
               if !(TypeRepr.of[Ctx] <:< TypeRepr.of[γ])
               then
                 report.errorAndAbort(
-                  s"Can only bind matching context, but »${Type.show[Ctx]}« is not a subtype of »${Type.show[γ]}« ",
+                  s"Can only bind matching context, but provided »${Type.show[Ctx]}« is not a subtype of required »${Type.show[γ]}« Try adding a type annotation to the outermost Async",
                   async.asExpr
                 )
               else
@@ -410,8 +410,9 @@ object delay {
               if !res.binds then StateRes(false, block)
               else handleStatement('{ ${ res.term.asExprOf[Async[Ctx, ?]] }.bind }.asTerm, continuation)
             case other: Term =>
+              println(s"SOME TERM")
               other.asExpr match
-                case '{ ($other: Async[Ctx, α]).bind } =>
+                case '{ ($other: Async[τ, α]).bind } =>
                   StateRes(
                     true,
                     doBind(other.asTerm) { v =>
@@ -421,7 +422,7 @@ object delay {
                     }.asTerm
                   )
                 case otherExpr =>
-                  // report.info(s"not an async: ${other.show}")
+                  println(s"NOT AN Async[${TypeRepr.of[Ctx].show}, ?]}\n${other.show}")
                   StateRes(false, other)
 
             case somethingElseEntirely =>
@@ -433,13 +434,13 @@ object delay {
         }
 
         def handleTerminal(expr: Term): RecRes[T] = {
-          // println(s"HANDLING TERMINAL\n${expr}")
+          println(s"HANDLING TERMINAL\n${expr.show}")
           val handled: StateRes = handleStatement(expr, None)
           val packedResult =
             if handled.binds
             then handled.statement.asExprOf[Async[Ctx, T]]
             else
-              // println(s"DOES NOT BIND\n${expr}")
+              println(s"DOES NOT BIND\n${expr.show}")
               // report.info(s"fixing\n${expr.show}")
               '{ Sync[Ctx](${ expr.asExprOf[T] }) }
           RecRes(packedResult, handled.binds)
@@ -448,13 +449,19 @@ object delay {
         def rec(term: Term): RecRes[T] =
           // println(s"+++++++++++++++++ doing recursion\n${term.show}\n")
           term match
+            // first couple of matches only “dig through” irrelevant AST nodes (restoring them if appropriate)
             case Inlined(a, b, t) =>
               val res = rec(t)
               RecRes(Inlined(a, b, res.term.asTerm).asExprOf[Async[Ctx, T]], res.binds)
+            case NamedArg(a, expr) =>
+              val RecRes(res, r) = rec(expr)
+              RecRes(NamedArg(a, res.asTerm).asExprOf[Async[Ctx, T]], r)
+            case Match(_, List(CaseDef(Wildcard(), None, inner))) => rec(inner)
+            case Typed(expr, tt)                                  => rec(expr)
             // not strictly necessary, but a reasonable simplification
-            case Block(Nil, e) => rec(e)
+            case Block(Nil, e)           => rec(e)
             case Block(statements, expr) =>
-              //println(s"BLOCK\n${statements}\n{$expr}")
+              // println(s"BLOCK\n${statements}\n{$expr}")
               val terminalRes = rec(expr)
               terminalRes.term match
                 case '{ $transformed: Async[Ctx, T] } =>
@@ -470,7 +477,7 @@ object delay {
                   report.errorAndAbort(s"cannot handle\n${other.asTerm.tpe.show}\n${other.show}")
 
             case other: Term =>
-              //println(s"TERMINAL ${other.show}")
+              println(s"TERMINAL ${other}")
               handleTerminal(other)
 
         rec(expr.asTerm)
