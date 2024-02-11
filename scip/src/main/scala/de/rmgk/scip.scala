@@ -162,15 +162,6 @@ object scip {
       scx.index - startBytes
     }
 
-    inline def augment[B](inline f: Scip[A] => Scip[B]): Scip[(A, B)] = Scip {
-      var hack: A = null.asInstanceOf
-      val b = f(scip.map { x =>
-        hack = x; x
-      }).run
-      if (hack == null) scx.fail
-      (hack, b)
-    }
-
     /** always backtracks independent of result */
     inline def lookahead: Scip[A] = Scip {
       val startLookahead = scx.index
