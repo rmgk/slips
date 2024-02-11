@@ -218,17 +218,17 @@ object scip {
     inline def trace(inline name: String): Scip[A] = Scip {
       if !scx.tracing then scip.run
       else
-        println(" " * scx.depth * 2 + s"+ $name ${scx.debugat(scx.index)}")
+        println(s"${" " * scx.depth * 2}+ $name ${scx.debugat(scx.index)}")
         scx.depth += 1
         try
           val res = scip.run
           scx.depth -= 1
-          println(" " * scx.depth * 2 + s"- $name ${scx.debugat(scx.index)} (${s"$res".take(42)})")
+          println(s"${" " * scx.depth * 2}- $name ${scx.debugat(scx.index)} (${s"$res".take(42)})")
           res
         catch
           case e: ScipEx =>
             scx.depth -= 1
-            println(" " * scx.depth * 2 + s"! $name ${scx.debugat(scx.lastFail)}")
+            println(s"${" " * scx.depth * 2}! $name ${scx.debugat(scx.lastFail)}")
             throw e
     }
 
