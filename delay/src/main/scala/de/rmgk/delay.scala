@@ -410,7 +410,7 @@ object delay {
               if !res.binds then StateRes(false, block)
               else handleStatement('{ ${ res.term.asExprOf[Async[Ctx, ?]] }.bind }.asTerm, continuation)
             case other: Term =>
-              println(s"SOME TERM")
+              //println(s"SOME TERM")
               other.asExpr match
                 case '{ ($other: Async[τ, α]).bind } =>
                   StateRes(
@@ -422,7 +422,7 @@ object delay {
                     }.asTerm
                   )
                 case otherExpr =>
-                  println(s"NOT AN Async[${TypeRepr.of[Ctx].show}, ?]}\n${other.show}")
+                  //println(s"NOT AN Async[${TypeRepr.of[Ctx].show}, ?]}\n${other.show}")
                   StateRes(false, other)
 
             case somethingElseEntirely =>
@@ -434,13 +434,13 @@ object delay {
         }
 
         def handleTerminal(expr: Term): RecRes[T] = {
-          println(s"HANDLING TERMINAL\n${expr.show}")
+          //println(s"HANDLING TERMINAL\n${expr.show}")
           val handled: StateRes = handleStatement(expr, None)
           val packedResult =
             if handled.binds
             then handled.statement.asExprOf[Async[Ctx, T]]
             else
-              println(s"DOES NOT BIND\n${expr.show}")
+              //println(s"DOES NOT BIND\n${expr.show}")
               // report.info(s"fixing\n${expr.show}")
               '{ Sync[Ctx](${ expr.asExprOf[T] }) }
           RecRes(packedResult, handled.binds)
@@ -477,7 +477,7 @@ object delay {
                   report.errorAndAbort(s"cannot handle\n${other.asTerm.tpe.show}\n${other.show}")
 
             case other: Term =>
-              println(s"TERMINAL ${other}")
+              //println(s"TERMINAL ${other}")
               handleTerminal(other)
 
         rec(expr.asTerm)
