@@ -11,21 +11,21 @@ import math.Numeric.Implicits.infixNumericOps
 trait Associative[A] {
   // the reason for the duplication is that extensions do not work with SAM
   def combine(left: A, right: A): A
-  extension (left: A) @targetName("combineExt") def combine(right: A): A = this.combine(left, right)
+  extension (left: A) @targetName("combineExt") infix def combine(right: A): A = this.combine(left, right)
 }
 
 object Associative {
   def combine[A: Associative](left: A, right: A): A = left combine right
 
-  given mapAssoc[K, V: Associative]: Associative[Map[K, V]] = (left, right) =>
-    right.foldLeft(left) { case (acc, (k, r)) =>
-      acc.updatedWith(k) { l => l combine Some(r) }
-    }
-
   given optionAssoc[V: Associative]: Associative[Option[V]] =
     case (Some(l), Some(r)) => Some(l combine r)
     case (None, r)          => r
     case (l, _)             => l
+
+  given mapAssoc[K, V: Associative]: Associative[Map[K, V]] = (left, right) =>
+    right.foldLeft(left) { case (acc, (k, r)) =>
+      acc.updatedWith(k) { l => l combine Some(r) }
+    }
 
   given numericAssoc[V: Numeric]: Associative[V] = _ + _
 

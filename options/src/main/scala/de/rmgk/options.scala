@@ -73,7 +73,7 @@ object options:
 
   inline def argumentParser[Res](inline expr: Res): ArgumentsParser[Res] =
     val (descriptors, handler) =
-      collectResources[Res, de.rmgk.options.Argument[_], de.rmgk.options.ArgumentContext](expr)
+      collectResources[Res, de.rmgk.options.Argument[?], de.rmgk.options.ArgumentContext](expr)
     ArgumentsParser(descriptors, handler)
 
   inline def parseArguments[Res](parameters: List[String])(inline expr: Res): ParseResult[Res] =
@@ -83,7 +83,7 @@ object options:
     val parser = argumentParser(expr)
     Argument(name, name, "", None)(using ArgumentValueParser.subcommandParser(parser, description))
 
-  case class ArgumentsParser[Res](descriptors: List[Argument[_]], handler: ArgumentContext => Res):
+  case class ArgumentsParser[Res](descriptors: List[Argument[?]], handler: ArgumentContext => Res):
     def formatHelp(): String =
       ParseError.formatHelp(descriptors)
     def parse(parameters: List[String]): ParseResult[Res] =
@@ -103,9 +103,9 @@ object options:
     @tailrec
     final def rec(
         remaining: List[String],
-        descriptors: List[Argument[_]],
-        bound: Map[Argument[_], Any]
-    ): (Map[Argument[_], Any], List[String]) =
+        descriptors: List[Argument[?]],
+        bound: Map[Argument[?], Any]
+    ): (Map[Argument[?], Any], List[String]) =
       if descriptors.isEmpty then return (bound, remaining)
       remaining match
         case Nil => (bound, Nil)
@@ -120,8 +120,8 @@ object options:
                 case None    => throw ParseException(s"could not parse: »$str« ($rest)")
   end ArgumentsParser
 
-  case class ArgumentContext(bound: Map[Argument[_], Any]) extends ResourceContext[Argument[_]] {
-    override def accessResource(res: Argument[_]): res.Type =
+  case class ArgumentContext(bound: Map[Argument[?], Any]) extends ResourceContext[Argument[?]] {
+    override def accessResource(res: Argument[?]): res.Type =
       bound.get(res).orElse(Option(res.default)).map(_.asInstanceOf[res.Type]).getOrElse:
         throw ParseException(s"required argument »${res.hint}« not provided")
   }
@@ -135,11 +135,11 @@ object options:
           println(s"Note: ${pe.msg}")
         case Right(value) => ()
 
-  case class ParseError(descriptors: List[Argument[_]], msg: String):
+  case class ParseError(descriptors: List[Argument[?]], msg: String):
     def formatHelp = ParseError.formatHelp(descriptors)
 
   object ParseError:
-    def formatHelp(descriptors: List[Argument[_]]): String =
+    def formatHelp(descriptors: List[Argument[?]]): String =
       val ordered = descriptors
 
       val lines = ordered.map: desc =>

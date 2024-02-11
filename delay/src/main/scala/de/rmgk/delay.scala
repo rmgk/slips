@@ -347,7 +347,7 @@ object delay {
           * In other words, this essentially just does `async.flatMap(withBound)`,
           * but works with the pieces directly to hopefully be a bit more reliable in this AST manipulation context
           */
-        def doBind[R: Type](async: Term)(withBound: Term => Expr[Async[Ctx, R]]): Expr[Async[_ <: Ctx, R]] =
+        def doBind[R: Type](async: Term)(withBound: Term => Expr[Async[Ctx, R]]): Expr[Async[? <: Ctx, R]] =
           async.tpe.asType match {
             case '[Async[γ, α]] =>
               if !(TypeRepr.of[Ctx] <:< TypeRepr.of[γ])
@@ -371,7 +371,7 @@ object delay {
 
         case class StateRes(binds: Boolean, statement: Statement)
         def handleStatement(statement: Statement, continuation: Option[Expr[Async[Ctx, T]]]): StateRes = {
-          report.info(s"------------ handling statement\n${statement.show}\n")
+          // report.info(s"------------ handling statement\n${statement.show}\n")
           statement match
             // handle val def that end with a bind, like:
             // val x = {
@@ -401,14 +401,14 @@ object delay {
                       if res.binds
                       then
                         val updated =
-                          ValDef.copy(vd)(name, typeTree, Some('{ ${ res.term.asExprOf[Async[Ctx, _]] }.bind }.asTerm))
+                          ValDef.copy(vd)(name, typeTree, Some('{ ${ res.term.asExprOf[Async[Ctx, ?]] }.bind }.asTerm))
                         handleStatement(updated, continuation)
                       else StateRes(false, statement)
 
             case block @ Block(_, _) =>
               val res = handleSubBlockOfType(block.asExpr)
               if !res.binds then StateRes(false, block)
-              else handleStatement('{ ${ res.term.asExprOf[Async[Ctx, _]] }.bind }.asTerm, continuation)
+              else handleStatement('{ ${ res.term.asExprOf[Async[Ctx, ?]] }.bind }.asTerm, continuation)
             case other: Term =>
               other.asExpr match
                 case '{ ($other: Async[Ctx, α]).bind } =>
