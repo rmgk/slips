@@ -425,9 +425,10 @@ object delay {
                   StateRes(false, other)
 
             case somethingElseEntirely =>
-              report.errorAndAbort(
-                s"cannot handle as async\n(${somethingElseEntirely.asInstanceOf[Term].tpe.show}) \n${somethingElseEntirely.show}"
-              )
+//              report.info(
+//                s"unknown how to handle as async\n(${somethingElseEntirely.asInstanceOf[Term].tpe.show}) \n${somethingElseEntirely.show}"
+//              )
+              StateRes(false, somethingElseEntirely)
 
         }
 
