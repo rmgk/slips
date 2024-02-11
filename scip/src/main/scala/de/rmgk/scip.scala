@@ -302,13 +302,9 @@ object scip {
   inline def choice(inline ss: String*): Scip[Boolean] =
     ${ MacroImpls.stringChoice('{ ss }) }
 
-  inline def seq(inline b: String): Scip[Boolean] =
-    val bytes = b.getU8Bytes
-    seq(bytes)
-  inline def seq(b: Array[Byte]): Scip[Boolean] = Scip { scx.contains(b) && { scx.index += b.length; true } }
-  inline def alt(inline b: String): Scip[Boolean] =
-    val bytes = b.getU8Bytes
-    alt(bytes)
+  inline def seq(inline b: String): Scip[Boolean] = seq(b.getU8Bytes)
+  inline def seq(b: Array[Byte]): Scip[Boolean]   = Scip { scx.contains(b) && { scx.index += b.length; true } }
+  inline def alt(inline b: String): Scip[Boolean] = alt(b.getU8Bytes)
   inline def alt(b: Array[Byte]): Scip[Boolean] = Scip {
     scx.available(1) && {
       val cur = scx.peek
