@@ -166,6 +166,17 @@ class SimpleTest extends munit.FunSuite {
     assertEquals(res, (("aβc", 4), (3, 7)))
   }
 
+
+  test("repeat empty match") {
+
+    val s = "123aβcABC"
+    val p = Scip(true).repSafe
+
+    val res = p.runInContext(Scx(s))
+    assertEquals(res, 1)
+
+  }
+
 }
 
 case class ScitzenDate(year: String, month: String, day: String) {

@@ -167,7 +167,7 @@ object scip {
       * ```
       * val res: Scip[(String, Int)] = "abc".all.str.augment(_.byteCount)
       * ```
-      *  */
+      */
     inline def augment[B](inline f: Scip[A] => Scip[B]): Scip[(A, B)] = Scip {
       var hack: A = null.asInstanceOf
       val b = f(scip.map { x =>
@@ -251,11 +251,26 @@ object scip {
         scx.fail
     }
     inline def str: Scip[String] = scip.orFail.dropstr
+
+    /** Repeats [[scip]] and returns the number of successful matches. */
     inline def rep: Scip[Int] = Scip {
       var matches = 0
       while scip.run do matches += 1
       matches
     }
+
+    /** Repeats [[scip]] and returns the number of successful matches.
+      * If [[scip]] parses no input the loop is aborted (counting the first successful match with no input as a single match)
+      */
+    inline def repSafe: Scip[Int] = Scip {
+      var matches = 0
+      while
+        val before = scx.index
+        scip.run && { matches += 1; true } && before < scx.index
+      do ()
+      matches
+    }
+
     inline def opt: Scip[true] = Scip { scip.run; true }
 
     inline infix def or(inline other: Scip[Boolean]): Scip[Boolean] = Scip { scip.run || other.run }
@@ -330,6 +345,7 @@ object scip {
           report.warning(s"value is not constant", s)
           '{ seq($s.getU8Bytes) }
         case Some(v) =>
+          if v.isEmpty then report.errorAndAbort("cannot match empty string", s)
           val bytes = v.getU8Bytes
           '{
             Scip {
@@ -340,18 +356,15 @@ object scip {
             }
           }
 
-    def bytesMatchImpl(bytes: Array[Byte], offset: Int)(using quotes: Quotes): Expr[Scip[Boolean]] = {
-      '{
-        Scip { (scx: Scx) ?=>
-          scx.available(${ Expr(bytes.length + offset) }) && ${
-            val stmts = bytes.iterator.zipWithIndex.map { (b, i) =>
-              '{ scx.ahead(${ Expr(i + offset) }, ${ Expr(b) }) }
-            }
-            stmts.reduceLeft((l, r) => '{ ${ l } && ${ r } })
-          }
-        }
-      }
-    }
+    def stringAltImpl(s: Expr[String])(using quotes: Quotes): Expr[Scip[Boolean]] =
+      import quotes.reflect.*
+      s.value match
+        case None =>
+          report.errorAndAbort(s"value is not constant", s)
+          '{ alt($s.getU8Bytes) }
+        case Some(v) =>
+          val bytes = v.map(_.toString.getU8Bytes.toSeq)
+          bytesAltImpl(trieFromBytes(bytes))
 
     def stringChoice(s: Expr[Seq[String]])(using quotes: Quotes): Expr[Scip[Boolean]] =
       import quotes.reflect.*
@@ -359,18 +372,24 @@ object scip {
         case None =>
           report.errorAndAbort(s"parameters are not constant", s)
         case Some(v) =>
+          if v.isEmpty then report.errorAndAbort("cannot choose from empty sequence", s)
           val bytes = v.map(_.getU8Bytes.toSeq)
           val trie  = trieFromBytes(bytes)
           bytesAltImpl(trie)
 
-    def stringAltImpl(s: Expr[String])(using quotes: Quotes): Expr[Scip[Boolean]] =
-      import quotes.reflect.*
-      s.value match
-        case None =>
-          report.errorAndAbort(s"value is not constant", s)
-        case Some(v) =>
-          val bytes = v.map(_.toString.getU8Bytes.toSeq)
-          bytesAltImpl(trieFromBytes(bytes))
+    def bytesMatchImpl(bytes: Array[Byte], offset: Int)(using quotes: Quotes): Expr[Scip[Boolean]] = {
+      '{
+        Scip { (scx: Scx) ?=>
+          scx.available(${ Expr(bytes.length + offset) }) && ${
+            val stmts = bytes.iterator.zipWithIndex.map { (b, i) =>
+              '{ scx.ahead(${ Expr(i + offset) }, ${ Expr(b) }) }
+            }
+            if stmts.isEmpty then quotes.reflect.report.errorAndAbort("cannot match on empty selection")
+            else stmts.reduceLeft((l, r) => '{ ${ l } && ${ r } })
+          }
+        }
+      }
+    }
 
     /** [[terminals]] are terminal bytes where the match ends */
     case class MiniTrie(terminals: Set[Byte], children: Map[Set[Byte], MiniTrie]) {
@@ -384,7 +403,7 @@ object scip {
       val children = tries.groupBy(_._2).map { (trie, orig) =>
         val bytes = orig.map(_._1).toSet
         bytes -> trie
-      }.toMap
+      }
       MiniTrie(elems, children)
     }
 
