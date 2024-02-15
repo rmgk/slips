@@ -7,7 +7,8 @@ publish / skip := true
 val commonSettings = Def.settings(
   organization := "de.rmgk.slips",
   scala3defaults,
-  Dependencies.munit, Dependencies.munitCheck,
+  Dependencies.munit,
+  Dependencies.munitCheck,
   explicitNulls(Compile / compile),
   publishSonatype,
 )
@@ -44,11 +45,11 @@ val datalog = crossProject(JSPlatform, JVMPlatform, NativePlatform)
 
 val delay = crossProject(JSPlatform, JVMPlatform, NativePlatform)
   .crossType(CrossType.Pure)
-  .settings(commonSettings, version := "0.5.0-SNAPSHOT", isSnapshot := false)
+  .settings(commonSettings, version := "0.8.0", isSnapshot := false)
 
 val scip = crossProject(JSPlatform, JVMPlatform, NativePlatform)
   .crossType(CrossType.Pure)
-  .settings(commonSettings, version := "0.5.1-SNAPSHOT", isSnapshot := true)
+  .settings(commonSettings, version := "0.8.0", isSnapshot := false)
   .dependsOn(delay)
 
 val script = crossProject(JVMPlatform, NativePlatform)

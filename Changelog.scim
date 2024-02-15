@@ -2,16 +2,22 @@
 
 == v.next
 
+
+== v0.8.0
+
+• update to Scala 3.4 (not compatible with 3.3)
+
+• Script
+	• simplify/generalize helper methods
+	• remove conversions (Scala native seems to have needed JVM methods by now)
+
 • Delay
 	• add defer as an alternative to resource
 	• refactor apply macros to be more straightforward and drop less information
 	• rewrite async macro to handle nested blocks (containing binds)
 
-== v0.8.0
-
-• Script
-	• simplify/generalize helper methods
-	• remove conversions (Scala native seems to have needed JVM methods by now)
+• Scip
+	• adapt to delay changes
 
 == v0.7.0
 
