@@ -9,7 +9,7 @@ import sbt.Keys.*
 object Settings {
 
   object Versions {
-    val scala3 = "3.4.0-RC4"
+    val scala3 = "3.4.0"
   }
 
   val commonCrossBuildVersions =
@@ -30,7 +30,7 @@ object Settings {
       "-language:existentials",
       "-deprecation",
       "-source",
-      "3.5",
+      "3.4",
     )
   )
 
@@ -72,11 +72,6 @@ object Settings {
   val scala3defaults = Def.settings(
     scalaVersion := Versions.scala3,
     commonScalacOptions
-  )
-
-  val dottyMigration = List(
-    Compile / compile / scalacOptions ++= List("-rewrite"),
-    Test / compile / scalacOptions ++= List("-rewrite")
   )
 
   val resolverJitpack = resolvers += "jitpack" at "https://jitpack.io"
