@@ -16,7 +16,14 @@ object Tools {
         "scm:git@github.com:rmgk/slips.git"
       )
     ),
-    developers := List(),
+    developers := List(
+      Developer(
+        id = "ragnar",
+        name = "Ragnar Mogk",
+        email = "git@rmgk.de",
+        url = url("https://github.com/rmgk/")
+      )
+    ),
 
     // no binary compatibility for 0.Y.z releases
     versionScheme := Some("strict"),
